@@ -34,6 +34,7 @@
   detected by its name instead of reading the start of every file).
 - Page Down and Page Up go to the next and previous folder or archive
   (they used to scroll by one screen).
+- animated WebP (and APNG and HEICS) images are animated like GIFs.
 - the Keyboard Shortcuts help page lists all shortcuts.
 - security: fixes for memory-safety bugs in the RAR decoder, fewer archive
   formats are parsed, size limits when extracting, no external XML entities,

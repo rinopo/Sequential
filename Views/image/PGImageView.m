@@ -268,8 +268,12 @@ static NSSize PGRoundedCornerSizes[4];
 		_imageRepHash = imageRepHash;
 
 		_isPDF = [_rep isKindOfClass:[NSPDFImageRep class]];
-		_numberOfFrames = [_rep isKindOfClass:[NSBitmapImageRep class]] ?
+		//	2026/11/01 any rep which answers the frame properties (eg, an animated
+		//	WebP's PGAnimatedImageRep), not only NSBitmapImageRep, can be animated
+		_numberOfFrames = [_rep respondsToSelector:@selector(valueForProperty:)] ?
 			[[(NSBitmapImageRep *)_rep valueForProperty:NSImageFrameCount] unsignedIntegerValue] : 1;
+		//	NSImage would otherwise cache the first frame of a rep which isn't a bitmap
+		_image.cacheMode = _numberOfFrames > 1 ? NSImageCacheNever : NSImageCacheDefault;
 
 		[self _runAnimationTimer];
 	} else {

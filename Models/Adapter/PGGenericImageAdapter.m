@@ -50,6 +50,108 @@ static NSBitmapImageRep *PGImageSourceImageRepAtIndex(CGImageSourceRef source, s
 	return rep;
 }
 
+//	2026/11/01 added: an animated image which NSBitmapImageRep can't animate
+//	(eg, an animated WebP); it answers the same frame properties as an animated
+//	GIF's NSBitmapImageRep so PGImageView animates it in the same way. ImageIO
+//	returns each frame already composited, and only the current frame is kept.
+@interface PGAnimatedImageRep : NSImageRep
++ (instancetype)animatedImageRepWithImageSource:(CGImageSourceRef)source;
+- (instancetype)initWithImageSource:(CGImageSourceRef)source frameDurations:(NSArray<NSNumber *> *)durations;
+@end
+
+@implementation PGAnimatedImageRep {
+	CGImageSourceRef _source;
+	NSArray<NSNumber *> *_frameDurations;
+	NSUInteger _currentFrame;
+	NSBitmapImageRep *_frameRep;
+}
+
+//	returns nil unless every frame of the source has a WebP, APNG or HEICS delay
+//	time (NSBitmapImageRep animates GIFs itself)
++ (instancetype)animatedImageRepWithImageSource:(CGImageSourceRef)source
+{
+	if(!source) return nil;
+	size_t const count = CGImageSourceGetCount(source);
+	if(count < 2) return nil;
+	NSMutableArray<NSNumber *> *const durations = [NSMutableArray arrayWithCapacity:count];
+	for(size_t i = 0; i < count; i++) {
+		NSDictionary *const properties = CFBridgingRelease(CGImageSourceCopyPropertiesAtIndex(source, i, NULL));
+		NSDictionary *const frameProperties =
+			properties[(NSString *)kCGImagePropertyWebPDictionary] ?:
+			properties[(NSString *)kCGImagePropertyPNGDictionary] ?:
+			properties[(NSString *)kCGImagePropertyHEICSDictionary];
+		NSNumber *const delay = frameProperties[(NSString *)kCGImagePropertyWebPDelayTime];	//	the same key in all three
+		if(!delay) return nil;
+		[durations addObject:delay.doubleValue > 0.0 ? delay : @0.1];
+	}
+	return [[self alloc] initWithImageSource:source frameDurations:durations];
+}
+
+- (instancetype)initWithImageSource:(CGImageSourceRef)source frameDurations:(NSArray<NSNumber *> *)durations
+{
+	if((self = [super init])) {
+		_source = (CGImageSourceRef)CFRetain(source);
+		_frameDurations = [durations copy];
+		_frameRep = PGImageSourceImageRepAtIndex(source, 0);
+		if(!_frameRep) return nil;
+		self.pixelsWide = _frameRep.pixelsWide;
+		self.pixelsHigh = _frameRep.pixelsHigh;
+		self.size = _frameRep.size;
+		self.alpha = _frameRep.alpha;
+		self.opaque = _frameRep.opaque;
+		self.bitsPerSample = _frameRep.bitsPerSample;
+		self.colorSpaceName = _frameRep.colorSpaceName;
+	}
+	return self;
+}
+- (void)dealloc
+{
+	if(_source) CFRelease(_source);
+}
+- (id)copyWithZone:(NSZone *)zone
+{
+	PGAnimatedImageRep *const copy = [[PGAnimatedImageRep alloc] initWithImageSource:_source frameDurations:_frameDurations];
+	[copy setProperty:NSImageCurrentFrame withValue:@(_currentFrame)];
+	return copy;
+}
+
+- (id)valueForProperty:(NSBitmapImageRepPropertyKey)property
+{
+	if([NSImageFrameCount isEqualToString:property]) return @(_frameDurations.count);
+	if([NSImageCurrentFrame isEqualToString:property]) return @(_currentFrame);
+	if([NSImageCurrentFrameDuration isEqualToString:property]) return _frameDurations[_currentFrame];
+	return nil;
+}
+- (void)setProperty:(NSBitmapImageRepPropertyKey)property withValue:(id)value
+{
+	if(![NSImageCurrentFrame isEqualToString:property]) return;
+	NSUInteger const i = [value unsignedIntegerValue] % _frameDurations.count;
+	if(i == _currentFrame) return;
+	NSBitmapImageRep *const rep = PGImageSourceImageRepAtIndex(_source, i);
+	if(!rep) return;
+	_currentFrame = i;
+	_frameRep = rep;
+}
+- (NSData *)TIFFRepresentation
+{
+	return _frameRep.TIFFRepresentation;
+}
+
+- (BOOL)draw
+{
+	return [self drawInRect:(NSRect){NSZeroPoint, self.size}];
+}
+- (BOOL)drawInRect:(NSRect)rect
+{
+	return [_frameRep drawInRect:rect];
+}
+- (BOOL)drawInRect:(NSRect)dstSpacePortionRect fromRect:(NSRect)srcSpacePortionRect operation:(NSCompositingOperation)op fraction:(CGFloat)requestedAlpha respectFlipped:(BOOL)respectContextIsFlipped hints:(NSDictionary<NSImageHintKey, id> *)hints
+{
+	return [_frameRep drawInRect:dstSpacePortionRect fromRect:srcSpacePortionRect operation:op fraction:requestedAlpha respectFlipped:respectContextIsFlipped hints:hints];
+}
+
+@end
+
 #if __has_feature(objc_arc)
 
 @interface PGGenericImageAdapter()
@@ -276,7 +378,8 @@ static NSBitmapImageRep *PGImageSourceImageRepAtIndex(CGImageSourceRef source, s
 
 			//	if the image is animated, use the entire image source
 			if(count > 1)
-				rep = [NSBitmapImageRep imageRepWithData:data];
+				rep = [PGAnimatedImageRep animatedImageRepWithImageSource:source] ?:
+					[NSBitmapImageRep imageRepWithData:data];
 			else
 				rep = rep0 = PGImageSourceImageRepAtIndex(source, 0);
 		}
