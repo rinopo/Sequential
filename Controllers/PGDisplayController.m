@@ -225,6 +225,8 @@ SetControlAttributedStringValue(NSControl *c, NSAttributedString *anObject) {
 - (void)_updateAmbientBackground;	//	2026/10/28 added
 - (void)_moveActiveNodeToTrash;	//	2026/10/28 added
 - (NSURL *)_URLForFinderTags;	//	2026/10/28 added
+- (PGNode *)_nodeForFinderTags;	//	2026/11/02 added
+- (PGNode *)_firstOfFolderMatchingTagFilterFrom:(PGNode *)node next:(BOOL)flag;	//	2026/11/02 added
 - (BOOL)_nodeMatchesTagFilter:(PGNode *)node;	//	2026/10/28 added
 - (void)_performLoadingDeferredArchives:(void (^)(void))block;	//	2026/10/28 added
 - (BOOL)_tryToGoForward:(BOOL)forward allowAlerts:(BOOL)flag;	//	2026/10/28 added
@@ -639,6 +641,14 @@ PGIndexOfFinderTagNamed(NSArray<NSString *> *tags, NSString *name)
 		return NSOrderedSame == [PGFinderTagName(tag) localizedCaseInsensitiveCompare:name];
 	}];
 }
+//	2026/11/02 added: the node whose file has the Finder tags of a page: the
+//	page's own file or, for a page in an archive (or PDF), the archive's file
+static PGNode *
+PGNodeWithTagsOfNode(PGNode *node)
+{
+	while(node && !(node.identifier.isFileIdentifier && node.identifier.URL)) node = node.parentNode;
+	return node;
+}
 static NSImage *
 PGFinderTagImage(NSColor *color)
 {
@@ -652,7 +662,8 @@ PGFinderTagImage(NSColor *color)
 - (IBAction)toggleFinderTag:(id)sender	//	2026/10/28 added
 {
 	//	adds the tag with the label's name (the user may have renamed it), or
-	//	removes it if the image has it; other tags are kept
+	//	removes it if the image has it; other tags are kept. 2026/11/02 images in
+	//	archives tag the archive
 	NSArray<NSString *> *const labels = NSWorkspace.sharedWorkspace.fileLabels;
 	NSInteger const label = [sender tag];
 	NSURL *const URL = [self _URLForFinderTags];
@@ -664,17 +675,18 @@ PGFinderTagImage(NSColor *color)
 	NSString *const actionName = [NSString stringWithFormat:NSNotFound != i ?
 		NSLocalizedString(@"Remove %@ Tag", @"Undo action name; %@ is the tag's name.") :
 		NSLocalizedString(@"Add %@ Tag", @"Undo action name; %@ is the tag's name."), labels[label]];
-	if(![self.activeDocument setFinderTags:tags ofNode:self.activeNode actionName:actionName]) NSBeep();
+	if(![self.activeDocument setFinderTags:tags ofNode:[self _nodeForFinderTags] actionName:actionName]) NSBeep();
 }
 - (IBAction)removeFinderTags:(id)sender	//	2026/10/28 added
 {
-	if(![self _URLForFinderTags] || ![self.activeDocument setFinderTags:@[] ofNode:self.activeNode
+	if(![self _URLForFinderTags] || ![self.activeDocument setFinderTags:@[] ofNode:[self _nodeForFinderTags]
 		actionName:NSLocalizedString(@"Remove All Tags", @"Undo action name.")]) NSBeep();
 }
 - (void)noteFinderTagsDidChangeForNode:(PGNode *)node	//	2026/10/28 added
 {
-	//	the thumbnail has been updated by the document
-	if(node != self.activeNode) return;
+	//	the thumbnail has been updated by the document; 2026/11/02 the node can be
+	//	the archive of the image
+	if(!node || node != [self _nodeForFinderTags]) return;
 	[self _updateInfoPanelText];
 	[self _flashInfoPanel];
 }
@@ -909,13 +921,15 @@ PGFinderTagImage(NSColor *color)
 - (IBAction)firstPage:(id)sender
 {
 	[self _performLoadingDeferredArchives:^{	//	2026/10/28 archives are loaded when needed
-		[self setActiveNode:[self.activeDocument.node.resourceAdapter sortedViewableNodeFirst:YES] forward:YES];
+		//	2026/11/02 the first page that matches the tag filter
+		[self setActiveNode:[self _nodeMatchingTagFilterFrom:[self.activeDocument.node.resourceAdapter sortedViewableNodeFirst:YES] forward:YES] forward:YES];
 	}];
 }
 - (IBAction)lastPage:(id)sender
 {
 	[self _performLoadingDeferredArchives:^{	//	2026/10/28 archives are loaded when needed
-		[self setActiveNode:[self.activeDocument.node.resourceAdapter sortedViewableNodeFirst:NO] forward:NO];
+		//	2026/11/02 the last page that matches the tag filter
+		[self setActiveNode:[self _nodeMatchingTagFilterFrom:[self.activeDocument.node.resourceAdapter sortedViewableNodeFirst:NO] forward:NO] forward:NO];
 	}];
 }
 
@@ -924,16 +938,18 @@ PGFinderTagImage(NSColor *color)
 - (IBAction)firstOfPreviousFolder:(id)sender
 {
 	[self _performLoadingDeferredArchives:^{	//	2026/10/28 archives are loaded when needed
-		if([self tryToSetActiveNode:[self.activeNode.resourceAdapter sortedFirstViewableNodeInFolderNext:NO inclusive:NO] forward:YES]) return;
+		//	2026/11/02 with a tag filter, folders and archives without a matching page are skipped
+		if([self tryToSetActiveNode:[self _firstOfFolderMatchingTagFilterFrom:[self.activeNode.resourceAdapter sortedFirstViewableNodeInFolderNext:NO inclusive:NO] next:NO] forward:YES]) return;
 		[self prepareToLoop]; // -firstOfPreviousFolder: is an exception to our usual looping mechanic, so we can't use -loopForward:.
 		PGNode *const last = [self.activeDocument.node.resourceAdapter sortedViewableNodeFirst:NO];
-		[self tryToLoopForward:NO toNode:last.resourceAdapter.isSortedFirstViewableNodeOfFolder ? last : [last.resourceAdapter sortedFirstViewableNodeInFolderNext:NO inclusive:YES] pageForward:YES allowAlerts:YES];
+		[self tryToLoopForward:NO toNode:[self _firstOfFolderMatchingTagFilterFrom:last.resourceAdapter.isSortedFirstViewableNodeOfFolder ? last : [last.resourceAdapter sortedFirstViewableNodeInFolderNext:NO inclusive:YES] next:NO] pageForward:YES allowAlerts:YES];
 	}];
 }
 - (IBAction)firstOfNextFolder:(id)sender
 {
 	[self _performLoadingDeferredArchives:^{	//	2026/10/28 archives are loaded when needed
-		if([self tryToSetActiveNode:[self.activeNode.resourceAdapter sortedFirstViewableNodeInFolderNext:YES inclusive:NO] forward:YES]) return;
+		//	2026/11/02 with a tag filter, folders and archives without a matching page are skipped
+		if([self tryToSetActiveNode:[self _firstOfFolderMatchingTagFilterFrom:[self.activeNode.resourceAdapter sortedFirstViewableNodeInFolderNext:YES inclusive:NO] next:YES] forward:YES]) return;
 		[self loopForward:YES];
 	}];
 }
@@ -1390,7 +1406,10 @@ PGFinderTagImage(NSColor *color)
 {
 	//	not with a tag filter: pages in archives can't have tags, and loading
 	//	every archive that's skipped would be slow
-	if(self.activeDocument.tagFilter) block();
+	//	2026/11/02 except those that have the tag: their pages have its tags
+	if(self.activeDocument.tagFilter) [PGResourceAdapter performLoadingDeferredContainers:block passingTest:^BOOL(PGNode *node) {
+		return [self _nodeMatchesTagFilter:node];
+	}];
 	else [PGResourceAdapter performLoadingDeferredContainers:block];
 }
 - (BOOL)_tryToGoForward:(BOOL)forward allowAlerts:(BOOL)flag	//	2026/10/28 was -tryToGoForward:allowAlerts:
@@ -1420,17 +1439,18 @@ PGFinderTagImage(NSColor *color)
 {
 	NSInteger const filter = self.activeDocument.tagFilter;
 	if(!filter) return YES;
-	if(!node.identifier.isFileIdentifier) return NO;
-	NSArray<NSNumber *> *const labels = node.identifier.tagLabels;
+	//	2026/11/02 pages in archives (and PDFs) have the archive's tags
+	PGNode *const file = PGNodeWithTagsOfNode(node);
+	if(!file) return NO;
+	NSArray<NSNumber *> *const labels = file.identifier.tagLabels;
 	return PGAnyTagFilter == filter ? labels.count > 0 : [labels containsObject:@(filter)];
 }
 - (PGNode *)_nodeMatchingTagFilterFrom:(PGNode *)node forward:(BOOL)forward	//	2026/10/28 added
 {
 	//	the node itself or the next one that matches; pages in archives and PDFs
-	//	can't have tags, so such a file is skipped at once instead of page by page
+	//	have the file's tags, so such a file is skipped at once instead of page by page
 	while(node && ![self _nodeMatchesTagFilter:node]) {
-		PGNode *file = node;
-		while(file && !file.identifier.isFileIdentifier) file = file.parentNode;
+		PGNode *const file = PGNodeWithTagsOfNode(node);
 		if(file && file != node && file != self.activeDocument.node)
 			node = [file.resourceAdapter sortedViewableNodeNext:forward includeChildren:NO];
 		else if(file == node)
@@ -1439,6 +1459,21 @@ PGFinderTagImage(NSColor *color)
 			return nil;	//	the document is an archive or PDF
 	}
 	return node;
+}
+- (PGNode *)_firstOfFolderMatchingTagFilterFrom:(PGNode *)node next:(BOOL)flag	//	2026/11/02 added
+{
+	//	node is the first page of a folder or archive; with a tag filter, the
+	//	first matching page of it or, when it has none, of the next (or
+	//	previous) folder or archive that has one. Archives without the tag
+	//	aren't loaded (see -_performLoadingDeferredArchives:)
+	if(!self.activeDocument.tagFilter) return node;
+	//	forwards, the next matching page is in the next folder that has one
+	if(flag) return [self _nodeMatchingTagFilterFrom:node forward:YES];
+	for(; node; node = [node.resourceAdapter sortedFirstViewableNodeInFolderNext:NO inclusive:NO]) {
+		PGNode *const match = [self _nodeMatchingTagFilterFrom:node forward:YES];
+		if(match && match.parentNode == node.parentNode) return match;
+	}
+	return nil;
 }
 - (IBAction)changeTagFilter:(id)sender	//	2026/10/28 added
 {
@@ -1461,7 +1496,7 @@ PGFinderTagImage(NSColor *color)
 - (void)loopForward:(BOOL)flag
 {
 	[self prepareToLoop];
-	[self tryToLoopForward:flag toNode:[self.activeDocument.node.resourceAdapter sortedViewableNodeFirst:flag] pageForward:flag allowAlerts:YES];
+	[self tryToLoopForward:flag toNode:[self _nodeMatchingTagFilterFrom:[self.activeDocument.node.resourceAdapter sortedViewableNodeFirst:flag] forward:flag] pageForward:flag allowAlerts:YES];	//	2026/11/02 tag filter
 }
 - (void)prepareToLoop
 {
@@ -1777,6 +1812,20 @@ PGFinderTagImage(NSColor *color)
 	NSArray *const removedChildren = aNotif.userInfo[PGDocumentRemovedChildrenKey];
 	PGNode *node = [self.activeNode.resourceAdapter sortedViewableNodeNext:YES afterRemovalOfChildren:removedChildren fromNode:changedNode];
 	if(!node) node = [self.activeNode.resourceAdapter sortedViewableNodeNext:NO afterRemovalOfChildren:removedChildren fromNode:changedNode];
+	//	2026/11/02 with a tag filter, the next (or previous) page that matches it
+	//	(not one that's being removed); else the next page as without the filter
+	if(node && self.activeDocument.tagFilter && ![self _nodeMatchesTagFilter:node]) {
+		BOOL (^const isRemoved)(PGNode *) = ^BOOL(PGNode *n) {
+			return [removedChildren containsObject:[n ancestorThatIsChildOfNode:changedNode]];
+		};
+		PGNode *match = nil;
+		for(int i = 0; i < 2 && !match; i++) {
+			BOOL const forward = 0 == i;
+			match = [self _nodeMatchingTagFilterFrom:node forward:forward];
+			while(match && isRemoved(match)) match = [self _nodeMatchingTagFilterFrom:[match.resourceAdapter sortedViewableNodeNext:forward] forward:forward];
+		}
+		if(match) node = match;
+	}
 	[self setActiveNode:node forward:YES];
 }
 - (void)documentSortedNodesDidChange:(NSNotification *)aNotif
@@ -2444,10 +2493,14 @@ PGFinderTagImage(NSColor *color)
 }
 - (NSURL *)_URLForFinderTags	//	2026/10/28 added
 {
-	//	only files on disk (not, eg, images in archives or PDF pages)
+	return [self _nodeForFinderTags].identifier.URL;
+}
+- (PGNode *)_nodeForFinderTags	//	2026/11/02 added
+{
+	//	the image's file on disk or, for an image in an archive (or a PDF page),
+	//	the archive's file
 	PGNode *const node = self.activeNode;
-	PGResourceIdentifier *const ident = node.identifier;
-	return ident.isFileIdentifier && node.isViewable ? ident.URL : nil;
+	return node.isViewable ? PGNodeWithTagsOfNode(node) : nil;
 }
 - (void)_flashInfoPanel	//	2026/10/28 added
 {
@@ -2859,9 +2912,11 @@ PGFinderTagImage(NSColor *color)
 
 	//	2026/10/28 the image's Finder tags that have a color; they're reread so
 	//	that tags changed elsewhere (eg, in the Finder) are shown when the image is
-	[node.identifier noteFinderTagsDidChange];
-	if(node) [self.activeDocument noteNodeThumbnailDidChange:node recursively:NO];
-	((PGInfoView *)_infoPanel.contentView).tagColors = [self _URLForFinderTags] ? node.identifier.tagColors : nil;
+	//	(2026/11/02 or those of its archive)
+	PGNode *const tagNode = [self _nodeForFinderTags];
+	[tagNode noteFinderTagsDidChange];	//	2026/11/02 also updates its Page menu item
+	if(tagNode) [self.activeDocument noteNodeThumbnailDidChange:tagNode recursively:NO];
+	((PGInfoView *)_infoPanel.contentView).tagColors = tagNode.identifier.tagColors;
 }
 - (void)_setCopyAsDesktopPicturePanelDidEnd:(NSSavePanel *)savePanel returnCode:(NSInteger)returnCode contextInfo:(void *)contextInfo
 {
