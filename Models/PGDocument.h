@@ -120,6 +120,18 @@ extern NSString *const PGDocumentUpdateRecursivelyKey;
 @property (nonatomic, copy) NSString *replacedRootFilePath;	//	2026/11/16 added: the document's file is being replaced by a new version at this path; see -[PGArchiveAdapter moveNodesToTrash:]
 - (BOOL)setFinderTags:(NSArray<NSString *> *)tags ofNode:(PGNode *)node actionName:(NSString *)actionName;
 
+//	2026/11/17 added: the orientation and the scale of single pages. The orientation is
+//	added to the document's (-baseOrientation), the scale replaces the document's.
+//	They aren't saved: they're forgotten when the document is closed.
+- (PGOrientation)pageOrientationForNode:(PGNode *)node;
+- (void)setPageOrientation:(PGOrientation)orientation forNode:(PGNode *)node;
+- (BOOL)getPageScaleMode:(out PGImageScaleMode *)outMode factor:(out CGFloat *)outFactor forNode:(PGNode *)node;	//	NO (and the document's values) if the page has no scale of its own; the arguments may be NULL
+- (void)setPageScaleMode:(PGImageScaleMode)mode factor:(CGFloat)factor forNode:(PGNode *)node;
+- (void)removePageScaleForNode:(PGNode *)node;
+- (BOOL)hasPageDisplaySettingsForNode:(PGNode *)node;
+- (void)removePageDisplaySettingsForNode:(PGNode *)node;
+- (void)removeAllPageDisplaySettings;
+
 - (void)noteNode:(PGNode *)node willRemoveNodes:(NSArray *)anArray;
 - (void)noteSortedChildrenDidChange;
 - (void)noteNodeIsViewableDidChange:(PGNode *)node;

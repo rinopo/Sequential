@@ -120,6 +120,10 @@ extern NSString *const PGDisplayControllerTimerDidChangeNotification;
 - (IBAction)changeSortRepeat:(id)sender;
 - (IBAction)revertOrientation:(id)sender;
 - (IBAction)changeOrientation:(id)sender;
+- (IBAction)revertPageOrientation:(id)sender;	//	2026/11/17 added: these 4 are for the page being shown only
+- (IBAction)changePageOrientation:(id)sender;
+- (IBAction)resetPageDisplaySettings:(id)sender;
+- (IBAction)applyPageDisplaySettingsToAllPages:(id)sender;
 - (IBAction)toggleAnimation:(id)sender;
 - (IBAction)changePageTransitionStyle:(id)sender;	//	2026/10/28 added
 - (IBAction)changePageTransitionDuration:(id)sender;	//	2026/10/28 added
@@ -132,6 +136,9 @@ extern NSString *const PGDisplayControllerTimerDidChangeNotification;
 - (IBAction)changeImageScaleMode:(id)sender;
 - (IBAction)zoomIn:(id)sender;
 - (IBAction)zoomOut:(id)sender;
+- (IBAction)changePageImageScaleMode:(id)sender;	//	2026/11/17 added: these 3 are for the page being shown only
+- (IBAction)pageZoomIn:(id)sender;
+- (IBAction)pageZoomOut:(id)sender;
 - (IBAction)changeImageScaleFactor:(id)sender;
 - (IBAction)minImageScaleFactor:(id)sender;
 - (IBAction)maxImageScaleFactor:(id)sender;
@@ -211,8 +218,8 @@ extern NSString *const PGDisplayControllerTimerDidChangeNotification;
 - (void)offerToOpenBookmark:(PGBookmark *)bookmark;
 - (void)advanceOnTimer;
 
-- (void)zoomBy:(CGFloat)factor animate:(BOOL)flag;
-- (BOOL)zoomKeyDown:(NSEvent *)firstEvent;
+- (void)zoomBy:(CGFloat)factor animate:(BOOL)flag page:(BOOL)page;	//	2026/11/17 page: the page being shown only, else the document
+- (BOOL)zoomKeyDown:(NSEvent *)firstEvent page:(BOOL)page;
 
 - (void)clipViewFrameDidChange:(NSNotification *)aNotif;
 

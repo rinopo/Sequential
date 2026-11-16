@@ -63,6 +63,17 @@ NSString *const PGDocumentUpdateRecursivelyKey = @"PGDocumentUpdateRecursively";
 //#define PGDocumentMaxCachedNodes 3	//	too small (machines now have 8GB+ of RAM)
 #define PGDocumentMaxCachedNodes 128	//	2023/10/21 this should not be a hardcoded number; it should use a heuristic based on the app's resource useage
 
+//	2026/11/17 added: the display settings of a single page; see -pageOrientationForNode:
+@interface PGPageDisplaySettings : NSObject
+@property (nonatomic, assign) PGOrientation orientation;
+@property (nonatomic, assign) BOOL hasScale;
+@property (nonatomic, assign) PGImageScaleMode scaleMode;
+@property (nonatomic, assign) CGFloat scaleFactor;
+@end
+
+@implementation PGPageDisplaySettings
+@end
+
 #if __has_feature(objc_arc)
 
 @interface PGDocument ()
@@ -86,6 +97,7 @@ NSString *const PGDocumentUpdateRecursivelyKey = @"PGDocumentUpdateRecursively";
 @property (nonatomic, assign) NSUInteger processingNodeCount;
 @property (nonatomic, strong) NSUndoManager *undoManager;	//	2026/10/28 added
 @property (nonatomic, assign) BOOL sortedChildrenChanged;
+@property (nonatomic, strong) NSMapTable<PGNode *, PGPageDisplaySettings *> *pageDisplaySettings;	//	2026/11/17 added
 
 - (PGNode *)_initialNode;
 - (void)_setInitialIdentifier:(PGResourceIdentifier *)ident;
@@ -544,6 +556,71 @@ NSString *const PGDocumentUpdateRecursivelyKey = @"PGDocumentUpdateRecursively";
 		[dc noteNewRecentDocument:self];
 	[self setDisplayController:nil];
 	[dc removeDocument:self];
+}
+
+//	MARK: -
+
+//	2026/11/17 added
+- (PGPageDisplaySettings *)_pageDisplaySettingsForNode:(PGNode *)node create:(BOOL)flag
+{
+	if(!node) return nil;
+	PGPageDisplaySettings *settings = [_pageDisplaySettings objectForKey:node];
+	if(!settings && flag) {
+		//	the nodes are compared by address and aren't kept alive
+		if(!_pageDisplaySettings) _pageDisplaySettings = [NSMapTable mapTableWithKeyOptions:NSPointerFunctionsWeakMemory | NSPointerFunctionsObjectPointerPersonality valueOptions:NSPointerFunctionsStrongMemory];
+		settings = [PGPageDisplaySettings new];
+		[_pageDisplaySettings setObject:settings forKey:node];
+	}
+	return settings;
+}
+- (void)_removePageDisplaySettingsIfUnused:(PGPageDisplaySettings *)settings forNode:(PGNode *)node
+{
+	if(settings && PGUpright == settings.orientation && !settings.hasScale) [_pageDisplaySettings removeObjectForKey:node];
+}
+- (PGOrientation)pageOrientationForNode:(PGNode *)node
+{
+	PGPageDisplaySettings *const settings = [self _pageDisplaySettingsForNode:node create:NO];
+	return settings ? settings.orientation : PGUpright;
+}
+- (void)setPageOrientation:(PGOrientation)orientation forNode:(PGNode *)node
+{
+	PGPageDisplaySettings *const settings = [self _pageDisplaySettingsForNode:node create:PGUpright != orientation];
+	settings.orientation = orientation;
+	[self _removePageDisplaySettingsIfUnused:settings forNode:node];
+}
+- (BOOL)getPageScaleMode:(out PGImageScaleMode *)outMode factor:(out CGFloat *)outFactor forNode:(PGNode *)node
+{
+	PGPageDisplaySettings *const settings = [self _pageDisplaySettingsForNode:node create:NO];
+	BOOL const hasScale = settings.hasScale;
+	if(outMode) *outMode = hasScale ? settings.scaleMode : self.imageScaleMode;
+	if(outFactor) *outFactor = hasScale ? settings.scaleFactor : self.imageScaleFactor;
+	return hasScale;
+}
+- (void)setPageScaleMode:(PGImageScaleMode)mode factor:(CGFloat)factor forNode:(PGNode *)node
+{
+	NSParameterAssert(factor > 0.0f);
+	PGPageDisplaySettings *const settings = [self _pageDisplaySettingsForNode:node create:YES];
+	settings.hasScale = YES;
+	settings.scaleMode = mode;
+	settings.scaleFactor = fabs(1.0f - factor) < 0.01f ? 1.0f : factor;	//	as -setImageScaleFactor:animate:
+}
+- (void)removePageScaleForNode:(PGNode *)node
+{
+	PGPageDisplaySettings *const settings = [self _pageDisplaySettingsForNode:node create:NO];
+	settings.hasScale = NO;
+	[self _removePageDisplaySettingsIfUnused:settings forNode:node];
+}
+- (BOOL)hasPageDisplaySettingsForNode:(PGNode *)node
+{
+	return [self _pageDisplaySettingsForNode:node create:NO] != nil;
+}
+- (void)removePageDisplaySettingsForNode:(PGNode *)node
+{
+	if(node) [_pageDisplaySettings removeObjectForKey:node];
+}
+- (void)removeAllPageDisplaySettings
+{
+	[_pageDisplaySettings removeAllObjects];
 }
 
 //	MARK: - PGPrefObject

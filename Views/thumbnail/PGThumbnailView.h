@@ -98,6 +98,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE. */
 - (NSArray<NSColor *> *)thumbnailView:(PGThumbnailView *)sender tagColorsForItem:(id)item;	//	2026/10/28 added
 - (NSRect)thumbnailView:(PGThumbnailView *)sender highlightRectForItem:(id)item; // A rect within {{0, 0}, {1, 1}}.
 - (BOOL)thumbnailView:(PGThumbnailView *)sender hasRealThumbnailForItem:(id)item;
+- (PGOrientation)thumbnailView:(PGThumbnailView *)sender orientationForItem:(id)item;	//	2026/11/17 added: the item's own, which is added to -thumbnailOrientation
 
 //	can return NSNotFound if item is not a container/folder:
 //- (NSInteger)thumbnailView:(PGThumbnailView *)sender directChildrenCountForItem:(id)item;

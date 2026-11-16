@@ -771,7 +771,9 @@ static inline NSPoint PGPointInRect(NSPoint aPoint, NSRect aRect)
 	CGFloat const x = -anEvent.deltaX, y = anEvent.deltaY;
 	if(anEvent.modifierFlags & NSEventModifierFlagCommand) {
 		[self PG_cancelPreviousPerformRequestsWithSelector:@selector(_delayedEndGesture) object:nil];
-		[self.delegate clipView:self magnifyBy:y * PGMouseWheelZoomFactor];
+		//	2026/11/17 with Shift (which zooms the document, not the page) the system
+		//	turns the wheel's movement into a horizontal one
+		[self.delegate clipView:self magnifyBy:(0.0f == y ? anEvent.deltaX : y) * PGMouseWheelZoomFactor];
 		[self PG_performSelector:@selector(_delayedEndGesture) withObject:nil fireDate:nil interval:1.0f options:kNilOptions]; // We don't actually know when the zooming will stop, since there's no such thing as a "scroll wheel up" event.
 	} else [self scrollBy:NSMakeSize(x * PGMouseWheelScrollFactor, y * PGMouseWheelScrollFactor) animation:PGNoAnimation];
 }
@@ -872,9 +874,10 @@ PerformMenuItemActionWithMatchingKeyEquivalent(NSEvent *event, NSMenu *menu) {
 
 		case PGKeyN:
 		case PGKeySpace: return [self magicPanForward:forward acrossFirst:YES];
-		case PGKeyV: return [self magicPanForward:forward acrossFirst:NO];
+		//	2026/11/17 C and X (were V and C): V mirrors the image vertically
+		case PGKeyC: return [self magicPanForward:forward acrossFirst:NO];
 		case PGKeyB: return [self magicPanForward:NO acrossFirst:YES];
-		case PGKeyC: return [self magicPanForward:NO acrossFirst:NO];
+		case PGKeyX: return [self magicPanForward:NO acrossFirst:NO];
 
 		case PGKeyPad1: return [self scrollInDirection:PGMinXEdgeMask | PGMinYEdgeMask type:PGScrollByPage];
 		case PGKeyPad2: return [self scrollInDirection:PGMinYEdgeMask type:PGScrollByPage];

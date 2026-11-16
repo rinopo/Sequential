@@ -718,23 +718,72 @@ CA
                                     </items>
                                 </menu>
                             </menuItem>
+                            <menuItem title="Scale" id="755">
+                                <menu key="submenu" title="Scale" id="756">
+                                    <items>
+                                        <menuItem title="Actual Size" keyEquivalent="A" id="764">
+                                            <attributedString key="attributedTitle"/>
+                                            <modifierMask key="keyEquivalentModifierMask" shift="YES"/>
+                                            <connections>
+                                                <action selector="changeImageScaleMode:" target="-1" id="1279"/>
+                                            </connections>
+                                        </menuItem>
+                                        <menuItem title="Automatic Fit" tag="1" keyEquivalent="F" id="759">
+                                            <modifierMask key="keyEquivalentModifierMask" shift="YES"/>
+                                            <connections>
+                                                <action selector="changeImageScaleMode:" target="-1" id="1281"/>
+                                            </connections>
+                                        </menuItem>
+                                        <menuItem title="Fit to Window" tag="3" keyEquivalent="S" id="758">
+                                            <modifierMask key="keyEquivalentModifierMask" shift="YES"/>
+                                            <connections>
+                                                <action selector="changeImageScaleMode:" target="-1" id="1282"/>
+                                            </connections>
+                                        </menuItem>
+                                        <menuItem isSeparatorItem="YES" id="837">
+                                            <modifierMask key="keyEquivalentModifierMask" command="YES"/>
+                                        </menuItem>
+                                        <menuItem id="1242">
+                                            <modifierMask key="keyEquivalentModifierMask"/>
+                                            <connections>
+                                                <action selector="changeImageScaleFactor:" target="-1" id="1277"/>
+                                            </connections>
+                                        </menuItem>
+                                        <menuItem isSeparatorItem="YES" id="767">
+                                            <modifierMask key="keyEquivalentModifierMask" command="YES"/>
+                                        </menuItem>
+                                        <menuItem title="Zoom In" id="835">
+                                            <modifierMask key="keyEquivalentModifierMask"/>
+                                            <connections>
+                                                <action selector="zoomIn:" target="-1" id="844"/>
+                                            </connections>
+                                        </menuItem>
+                                        <menuItem title="Zoom Out" id="836">
+                                            <modifierMask key="keyEquivalentModifierMask"/>
+                                            <connections>
+                                                <action selector="zoomOut:" target="-1" id="845"/>
+                                            </connections>
+                                        </menuItem>
+                                    </items>
+                                </menu>
+                            </menuItem>
                             <menuItem title="Reorient" id="893">
                                 <menu key="submenu" title="Reorient" id="894">
                                     <items>
-                                        <menuItem title="Upright" keyEquivalent="o" id="1304">
-                                            <modifierMask key="keyEquivalentModifierMask"/>
+                                        <menuItem title="Upright" keyEquivalent="O" id="1304">
+                                            <modifierMask key="keyEquivalentModifierMask" shift="YES"/>
                                             <connections>
                                                 <action selector="revertOrientation:" target="-1" id="1305"/>
                                             </connections>
                                         </menuItem>
                                         <menuItem isSeparatorItem="YES" id="1306"/>
-                                        <menuItem title="90° Clockwise" tag="7" keyEquivalent="r" id="895">
-                                            <modifierMask key="keyEquivalentModifierMask"/>
+                                        <menuItem title="90° Clockwise" tag="7" keyEquivalent="R" id="895">
+                                            <modifierMask key="keyEquivalentModifierMask" shift="YES"/>
                                             <connections>
                                                 <action selector="changeOrientation:" target="-1" id="902"/>
                                             </connections>
                                         </menuItem>
-                                        <menuItem title="90° Counterclockwise" tag="4" keyEquivalent="R" id="896">
+                                        <menuItem title="90° Counterclockwise" tag="4" keyEquivalent="L" id="896">
                                             <modifierMask key="keyEquivalentModifierMask" shift="YES"/>
                                             <connections>
                                                 <action selector="changeOrientation:" target="-1" id="903"/>
@@ -746,12 +795,14 @@ CA
                                             </connections>
                                         </menuItem>
                                         <menuItem isSeparatorItem="YES" id="1303"/>
-                                        <menuItem title="Mirror Horizontally" tag="2" id="1299">
+                                        <menuItem title="Mirror Horizontally" tag="2" keyEquivalent="H" id="1299">
+                                            <modifierMask key="keyEquivalentModifierMask" shift="YES"/>
                                             <connections>
                                                 <action selector="changeOrientation:" target="-1" id="1301"/>
                                             </connections>
                                         </menuItem>
-                                        <menuItem title="Mirror Vertically" tag="1" id="1300">
+                                        <menuItem title="Mirror Vertically" tag="1" keyEquivalent="V" id="1300">
+                                            <modifierMask key="keyEquivalentModifierMask" shift="YES"/>
                                             <connections>
                                                 <action selector="changeOrientation:" target="-1" id="1302"/>
                                             </connections>
@@ -759,8 +810,8 @@ CA
                                     </items>
                                 </menu>
                             </menuItem>
-                            <menuItem title="Reset rotation" keyEquivalent="r" id="Pge-aA-Qb5">
-                                <modifierMask key="keyEquivalentModifierMask" option="YES" command="YES"/>
+                            <menuItem title="Reset rotation" id="Pge-aA-Qb5">
+                                <modifierMask key="keyEquivalentModifierMask"/>
                                 <connections>
                                     <action selector="resetRotation:" target="-1" id="rYl-sT-Isc"/>
                                 </connections>
@@ -874,57 +925,108 @@ CA
                         </items>
                     </menu>
                 </menuItem>
-                <menuItem title="Scale" id="755">
-                    <menu key="submenu" title="Scale" id="756">
+                <menuItem title="Page" id="PPg-00-itm">
+                    <menu key="submenu" title="Page" id="PPg-00-mnu">
                         <items>
-                            <menuItem title="Actual Size" keyEquivalent="a" id="764">
-                                <attributedString key="attributedTitle"/>
+                            <menuItem title="Scale" id="PPg-10-itm">
+                                <menu key="submenu" title="Scale" id="PPg-10-mnu">
+                                    <items>
+                                        <menuItem title="Actual Size" keyEquivalent="a" id="PPg-11-itm">
+                                            <modifierMask key="keyEquivalentModifierMask"/>
+                                            <connections>
+                                                <action selector="changePageImageScaleMode:" target="-1" id="PPg-11-act"/>
+                                            </connections>
+                                        </menuItem>
+                                        <menuItem title="Automatic Fit" tag="1" keyEquivalent="f" id="PPg-12-itm">
+                                            <modifierMask key="keyEquivalentModifierMask"/>
+                                            <connections>
+                                                <action selector="changePageImageScaleMode:" target="-1" id="PPg-12-act"/>
+                                            </connections>
+                                        </menuItem>
+                                        <menuItem title="Fit to Window" tag="3" keyEquivalent="s" id="PPg-13-itm">
+                                            <modifierMask key="keyEquivalentModifierMask"/>
+                                            <connections>
+                                                <action selector="changePageImageScaleMode:" target="-1" id="PPg-13-act"/>
+                                            </connections>
+                                        </menuItem>
+                                        <menuItem isSeparatorItem="YES" id="PPg-14-itm"/>
+                                        <menuItem title="Zoom In" id="PPg-15-itm">
+                                            <modifierMask key="keyEquivalentModifierMask"/>
+                                            <connections>
+                                                <action selector="pageZoomIn:" target="-1" id="PPg-15-act"/>
+                                            </connections>
+                                        </menuItem>
+                                        <menuItem title="Zoom Out" id="PPg-16-itm">
+                                            <modifierMask key="keyEquivalentModifierMask"/>
+                                            <connections>
+                                                <action selector="pageZoomOut:" target="-1" id="PPg-16-act"/>
+                                            </connections>
+                                        </menuItem>
+                                    </items>
+                                </menu>
+                            </menuItem>
+                            <menuItem title="Reorient" id="PPg-20-itm">
+                                <menu key="submenu" title="Reorient" id="PPg-20-mnu">
+                                    <items>
+                                        <menuItem title="Upright" keyEquivalent="o" id="PPg-21-itm">
+                                            <modifierMask key="keyEquivalentModifierMask"/>
+                                            <connections>
+                                                <action selector="revertPageOrientation:" target="-1" id="PPg-21-act"/>
+                                            </connections>
+                                        </menuItem>
+                                        <menuItem isSeparatorItem="YES" id="PPg-22-itm"/>
+                                        <menuItem title="90° Clockwise" tag="7" keyEquivalent="r" id="PPg-23-itm">
+                                            <modifierMask key="keyEquivalentModifierMask"/>
+                                            <connections>
+                                                <action selector="changePageOrientation:" target="-1" id="PPg-23-act"/>
+                                            </connections>
+                                        </menuItem>
+                                        <menuItem title="90° Counterclockwise" tag="4" keyEquivalent="l" id="PPg-24-itm">
+                                            <modifierMask key="keyEquivalentModifierMask"/>
+                                            <connections>
+                                                <action selector="changePageOrientation:" target="-1" id="PPg-24-act"/>
+                                            </connections>
+                                        </menuItem>
+                                        <menuItem title="180° Upside down" tag="3" id="PPg-25-itm">
+                                            <modifierMask key="keyEquivalentModifierMask"/>
+                                            <connections>
+                                                <action selector="changePageOrientation:" target="-1" id="PPg-25-act"/>
+                                            </connections>
+                                        </menuItem>
+                                        <menuItem isSeparatorItem="YES" id="PPg-26-itm"/>
+                                        <menuItem title="Mirror Horizontally" tag="2" keyEquivalent="h" id="PPg-27-itm">
+                                            <modifierMask key="keyEquivalentModifierMask"/>
+                                            <connections>
+                                                <action selector="changePageOrientation:" target="-1" id="PPg-27-act"/>
+                                            </connections>
+                                        </menuItem>
+                                        <menuItem title="Mirror Vertically" tag="1" keyEquivalent="v" id="PPg-28-itm">
+                                            <modifierMask key="keyEquivalentModifierMask"/>
+                                            <connections>
+                                                <action selector="changePageOrientation:" target="-1" id="PPg-28-act"/>
+                                            </connections>
+                                        </menuItem>
+                                    </items>
+                                </menu>
+                            </menuItem>
+                            <menuItem isSeparatorItem="YES" id="PPg-30-itm"/>
+                            <menuItem title="Reset to Document Settings" id="PPg-31-itm">
                                 <modifierMask key="keyEquivalentModifierMask"/>
                                 <connections>
-                                    <action selector="changeImageScaleMode:" target="-1" id="1279"/>
+                                    <action selector="resetPageDisplaySettings:" target="-1" id="PPg-31-act"/>
                                 </connections>
                             </menuItem>
-                            <menuItem title="Automatic Fit" tag="1" keyEquivalent="f" id="759">
+                            <menuItem title="Apply to All Pages" id="PPg-32-itm">
                                 <modifierMask key="keyEquivalentModifierMask"/>
                                 <connections>
-                                    <action selector="changeImageScaleMode:" target="-1" id="1281"/>
-                                </connections>
-                            </menuItem>
-                            <menuItem title="Fit to Window" tag="3" keyEquivalent="s" id="758">
-                                <modifierMask key="keyEquivalentModifierMask"/>
-                                <connections>
-                                    <action selector="changeImageScaleMode:" target="-1" id="1282"/>
-                                </connections>
-                            </menuItem>
-                            <menuItem isSeparatorItem="YES" id="837">
-                                <modifierMask key="keyEquivalentModifierMask" command="YES"/>
-                            </menuItem>
-                            <menuItem id="1242">
-                                <modifierMask key="keyEquivalentModifierMask"/>
-                                <connections>
-                                    <action selector="changeImageScaleFactor:" target="-1" id="1277"/>
-                                </connections>
-                            </menuItem>
-                            <menuItem isSeparatorItem="YES" id="767">
-                                <modifierMask key="keyEquivalentModifierMask" command="YES"/>
-                            </menuItem>
-                            <menuItem title="Zoom In" id="835">
-                                <modifierMask key="keyEquivalentModifierMask"/>
-                                <connections>
-                                    <action selector="zoomIn:" target="-1" id="844"/>
-                                </connections>
-                            </menuItem>
-                            <menuItem title="Zoom Out" id="836">
-                                <modifierMask key="keyEquivalentModifierMask"/>
-                                <connections>
-                                    <action selector="zoomOut:" target="-1" id="845"/>
+                                    <action selector="applyPageDisplaySettingsToAllPages:" target="-1" id="PPg-32-act"/>
                                 </connections>
                             </menuItem>
                         </items>
                     </menu>
                 </menuItem>
-                <menuItem title="Page" id="266">
-                    <menu key="submenu" title="Page" id="267">
+                <menuItem title="Go" id="266">
+                    <menu key="submenu" title="Go" id="267">
                         <items>
                             <menuItem title="First" id="606">
                                 <connections>
@@ -973,13 +1075,13 @@ CA
                                     <action selector="skipBeforeFolder:" target="-1" id="1118"/>
                                 </connections>
                             </menuItem>
-                            <menuItem title="Last of Folder" keyEquivalent="l" id="1137">
+                            <menuItem title="Last of Folder" keyEquivalent="e" id="1137">
                                 <modifierMask key="keyEquivalentModifierMask"/>
                                 <connections>
                                     <action selector="lastOfFolder:" target="-1" id="1139"/>
                                 </connections>
                             </menuItem>
-                            <menuItem title="First of Folder" keyEquivalent="L" id="1138">
+                            <menuItem title="First of Folder" keyEquivalent="E" id="1138">
                                 <modifierMask key="keyEquivalentModifierMask" shift="YES"/>
                                 <connections>
                                     <action selector="firstOfFolder:" target="-1" id="1140"/>
@@ -1086,6 +1188,7 @@ CA
             <connections>
                 <outlet property="defaultPageMenu" destination="267" id="569"/>
                 <outlet property="orientationMenu" destination="894" id="1331"/>
+                <outlet property="pageOrientationMenu" destination="PPg-20-mnu" id="PPg-20-out"/>
                 <outlet property="pageMenuItem" destination="266" id="570"/>
                 <outlet property="scaleSlider" destination="1252" id="1255"/>
                 <outlet property="scaleSliderItem" destination="1242" id="1243"/>
@@ -1094,8 +1197,8 @@ CA
                 <outlet property="toggleFullscreen" destination="892" id="1210"/>
                 <outlet property="windowsMenu" destination="916" id="924"/>
                 <outlet property="windowsMenuSeparator" destination="1165" id="1166"/>
-                <outlet property="zoomIn" destination="835" id="990"/>
-                <outlet property="zoomOut" destination="836" id="1205"/>
+                <outlet property="zoomIn" destination="PPg-15-itm" id="990"/>
+                <outlet property="zoomOut" destination="PPg-16-itm" id="1205"/>
             </connections>
         </customObject>
         <customObject id="536" userLabel="Bookmark Controller" customClass="PGBookmarkController">

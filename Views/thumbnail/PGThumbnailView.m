@@ -1758,7 +1758,9 @@ if(activeNode == item)
 			continue;
 		}
 		NSSize originalSize = thumb.size;
-		if(PGRotated90CCW & _thumbnailOrientation) originalSize = NSMakeSize(originalSize.height, originalSize.width);
+		//	2026/11/17 the document's orientation and the page's
+		PGOrientation const thumbnailOrientation = PGAddOrientation(_thumbnailOrientation, self.dataSource ? [self.dataSource thumbnailView:self orientationForItem:item] : PGUpright);
+		if(PGRotated90CCW & thumbnailOrientation) originalSize = NSMakeSize(originalSize.height, originalSize.width);
 		NSRect const frame = [self frameOfItemAtIndex:i withMargin:NO];
 		NSRect const thumbnailRect = PGIntegralRect(PGCenteredSizeInRect(PGScaleSizeByFloat(originalSize, MIN(1, MIN(NSWidth(frame) / originalSize.width, NSHeight(frame) / originalSize.height))), frame));
 		BOOL const enabled = [self.dataSource thumbnailView:self canSelectItem:item];
@@ -1773,7 +1775,7 @@ if(activeNode == item)
 		NSRect transformedThumbnailRect = thumbnailRect;
 		NSAffineTransform *const transform = [NSAffineTransform PG_transformWithRect:&transformedThumbnailRect
 			 // Also flip it vertically because our view is flipped and -drawInRect:… ignores that.
-			orientation:hasRealThumbnail ? PGAddOrientation(_thumbnailOrientation, PGFlippedVert) : PGFlippedVert];
+			orientation:hasRealThumbnail ? PGAddOrientation(thumbnailOrientation, PGFlippedVert) : PGFlippedVert];
 		[transform concat];
 		[thumb drawInRect:transformedThumbnailRect fromRect:NSZeroRect operation:NSCompositingOperationSourceOver fraction:enabled ? 1.0f : 0.33f];
 		[transform invert];
@@ -2251,6 +2253,10 @@ NSLog(@"%@", logStr);
 - (NSRect)thumbnailView:(PGThumbnailView *)sender highlightRectForItem:(id)item
 {
 	return NSMakeRect(0.0f, 0.0f, 1.0f, 1.0f);
+}
+- (PGOrientation)thumbnailView:(PGThumbnailView *)sender orientationForItem:(id)item	//	2026/11/17 added
+{
+	return PGUpright;
 }
 - (BOOL)thumbnailView:(PGThumbnailView *)sender hasRealThumbnailForItem:(id)item
 {

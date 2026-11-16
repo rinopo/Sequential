@@ -87,3 +87,6 @@
 "Repeat All" = "繰り返す";
 "Shuffle" = "ランダム";
 "Repeat Off" = "繰り返さない";
+"Go" = "移動";
+"Reset to Document Settings" = "書類の設定に戻す";
+"Apply to All Pages" = "すべてのページに適用";

@@ -207,6 +207,7 @@ SetControlAttributedStringValue(NSControl *c, NSAttributedString *anObject) {
 @property (nonatomic, assign) BOOL spreadComposed;	//	the image being shown is the composed spread
 @property (nonatomic, strong) PGNode *spreadForcedPartner;	//	going backwards: the page the spread must end with
 @property (nonatomic, assign) BOOL spreadSuppressed;	//	show the next page alone
+@property (nonatomic, assign) BOOL gestureChangesPage;	//	2026/11/17 added: the gesture changes the page, not the document
 @property (nonatomic, strong) CALayer *kenBurnsLayer;	//	2026/10/28 added
 @property (nonatomic, strong) NSBitmapImageRep *kenBurnsImage;	//	2026/10/28 added
 
@@ -799,7 +800,42 @@ PGFinderTagImage(NSColor *color)
 }
 - (IBAction)changeOrientation:(id)sender
 {
-	self.activeDocument.baseOrientation = PGAddOrientation(self.activeDocument.baseOrientation, [sender tag]);
+	[self _addOrientation:[sender tag] toPage:NO];
+}
+//	2026/11/17 added: the same for the page being shown only (Page menu)
+- (IBAction)revertPageOrientation:(id)sender
+{
+	if(!self._pageSettingsEnabled) return;
+	[self.activeDocument setPageOrientation:PGUpright forNode:self.activeNode];
+	[self _updateImageOrientation];
+	[self resetRotation:sender];
+}
+- (IBAction)changePageOrientation:(id)sender
+{
+	[self _addOrientation:[sender tag] toPage:YES];
+}
+- (IBAction)resetPageDisplaySettings:(id)sender
+{
+	[self.activeDocument removePageDisplaySettingsForNode:self.activeNode];
+	[self _updateImageOrientation];
+}
+- (IBAction)applyPageDisplaySettingsToAllPages:(id)sender
+{
+	//	the document gets what this page shows, and no page differs from it anymore
+	PGDocument *const doc = self.activeDocument;
+	PGNode *const node = self.activeNode;
+	if(!doc || !node || !self._pageSettingsEnabled) return;
+	PGOrientation const orientation = PGAddOrientation(doc.baseOrientation, [doc pageOrientationForNode:node]);
+	PGImageScaleMode mode;
+	CGFloat factor;
+	BOOL const hasScale = [doc getPageScaleMode:&mode factor:&factor forNode:node];
+	[doc removeAllPageDisplaySettings];
+	doc.baseOrientation = orientation;
+	if(hasScale) {
+		if(PGConstantFactorScale == mode) [doc setImageScaleFactor:factor animate:NO];
+		else doc.imageScaleMode = mode;
+	}
+	[self _updateImageOrientation];
 }
 - (IBAction)resetRotation:(id)sender
 {
@@ -880,31 +916,43 @@ PGFinderTagImage(NSColor *color)
 
 - (IBAction)changeImageScaleMode:(id)sender
 {
-	//	see -documentImageScaleDidChange:
-	self.activeDocument.imageScaleMode = [sender tag];
+	[self _setScaleMode:[sender tag] ofPage:NO];
 }
 - (IBAction)zoomIn:(id)sender
 {
-	if(![self zoomKeyDown:self.window.currentEvent]) [self zoomBy:2.0f animate:YES];
+	if(![self zoomKeyDown:self.window.currentEvent page:NO]) [self zoomBy:2.0f animate:YES page:NO];
 }
 - (IBAction)zoomOut:(id)sender
 {
-	if(![self zoomKeyDown:self.window.currentEvent]) [self zoomBy:0.5f animate:YES];
+	if(![self zoomKeyDown:self.window.currentEvent page:NO]) [self zoomBy:0.5f animate:YES page:NO];
 }
 - (IBAction)changeImageScaleFactor:(id)sender
 {
-	[self.activeDocument setImageScaleFactor:pow(2.0f, (CGFloat)[sender doubleValue]) animate:NO];
+	[self _setScaleFactor:pow(2.0f, (CGFloat)[sender doubleValue]) animate:NO ofPage:NO];
 	[[PGDocumentController sharedDocumentController].scaleMenu update];
 }
 - (IBAction)minImageScaleFactor:(id)sender
 {
-	[self.activeDocument setImageScaleFactor:PGScaleMin];
+	[self _setScaleFactor:PGScaleMin animate:YES ofPage:NO];
 	[[PGDocumentController sharedDocumentController].scaleMenu update];
 }
 - (IBAction)maxImageScaleFactor:(id)sender
 {
-	[self.activeDocument setImageScaleFactor:PGScaleMax];
+	[self _setScaleFactor:PGScaleMax animate:YES ofPage:NO];
 	[[PGDocumentController sharedDocumentController].scaleMenu update];
+}
+//	2026/11/17 added: the same for the page being shown only (Page menu)
+- (IBAction)changePageImageScaleMode:(id)sender
+{
+	[self _setScaleMode:[sender tag] ofPage:YES];
+}
+- (IBAction)pageZoomIn:(id)sender
+{
+	if(![self zoomKeyDown:self.window.currentEvent page:YES]) [self zoomBy:2.0f animate:YES page:YES];
+}
+- (IBAction)pageZoomOut:(id)sender
+{
+	if(![self zoomKeyDown:self.window.currentEvent page:YES]) [self zoomBy:0.5f animate:YES page:YES];
 }
 
 //	MARK: -
@@ -1579,11 +1627,11 @@ PGFinderTagImage(NSColor *color)
 
 //	MARK: -
 
-- (void)zoomBy:(CGFloat)factor animate:(BOOL)flag
+- (void)zoomBy:(CGFloat)factor animate:(BOOL)flag page:(BOOL)page
 {
-	[self.activeDocument setImageScaleFactor:MAX(PGScaleMin, MIN([_imageView averageScaleFactor] * factor, PGScaleMax)) animate:flag];
+	[self _setScaleFactor:MAX(PGScaleMin, MIN([_imageView averageScaleFactor] * factor, PGScaleMax)) animate:flag ofPage:page];
 }
-- (BOOL)zoomKeyDown:(NSEvent *)firstEvent
+- (BOOL)zoomKeyDown:(NSEvent *)firstEvent page:(BOOL)page
 {
 	[NSCursor setHiddenUntilMouseMoves:YES];
 	[_imageView setUsesCaching:NO];
@@ -1611,8 +1659,8 @@ PGFinderTagImage(NSColor *color)
 		} else {
 			switch(dir) {
 				case PGZoomNone: stop = YES; break;
-				case PGZoomIn:  [self zoomBy:1.1f animate:NO]; break;
-				case PGZoomOut: [self zoomBy:1.0f / 1.1f animate:NO]; break;
+				case PGZoomIn:  [self zoomBy:1.1f animate:NO page:page]; break;
+				case PGZoomOut: [self zoomBy:1.0f / 1.1f animate:NO page:page]; break;
 			}
 			if(!stop) didAnything = YES;
 		}
@@ -1682,7 +1730,7 @@ PGFinderTagImage(NSColor *color)
 #endif
 		NSImageRep *const rep = aNotif.userInfo[PGImageRepKey];
 		//	2026/10/28 the composed spread is upright already
-		PGOrientation const orientation = _spreadComposed ? PGUpright : [self.activeNode.resourceAdapter orientationWithBase:YES];
+		PGOrientation const orientation = _spreadComposed ? PGUpright : self._activeNodeOrientation;	//	2026/11/17 with the page's
 		[_imageView setImageRep:rep
 					orientation:orientation
 						   size:[self _sizeForImageRep:rep orientation:orientation]];
@@ -1802,6 +1850,7 @@ PGFinderTagImage(NSColor *color)
 	[_activeNode PG_removeObserver:self name:PGNodeLoadingDidProgressNotification];
 	[_activeNode PG_removeObserver:self name:PGNodeReadyForViewingNotification];
 	if(_activeNode) [self _readActiveNode];
+	[_thumbnailController pageOrientationsDidChange];	//	2026/11/17 added: the pages' orientations are ignored or not
 }
 
 //	MARK: -
@@ -1859,9 +1908,7 @@ PGFinderTagImage(NSColor *color)
 }
 - (void)documentBaseOrientationDidChange:(NSNotification *)aNotif
 {
-	PGOrientation const o = [self.activeNode.resourceAdapter orientationWithBase:YES];
-	[_imageView setImageRep:_imageView.rep orientation:o size:[self _sizeForImageRep:_imageView.rep orientation:o]];
-	[self _updateAmbientBackground];	//	2026/10/28 added
+	[self _updateImageOrientation];
 }
 
 //	MARK: -
@@ -2746,10 +2793,14 @@ PGFinderTagImage(NSColor *color)
 }
 - (NSSize)_sizeForImageRep:(NSImageRep *)rep orientation:(PGOrientation)orientation
 {
+	//	2026/11/17 the page's scale if it has one, else the document's
+	PGImageScaleMode mode = self.activeDocument.imageScaleMode;
+	CGFloat factor = self.activeDocument.imageScaleFactor;
+	if(self._pageSettingsEnabled) [self.activeDocument getPageScaleMode:&mode factor:&factor forNode:self.activeNode];
 	return [self _sizeForImageRep:rep
 					  orientation:orientation
-						scaleMode:self.activeDocument.imageScaleMode
-						   factor:self.activeDocument.imageScaleFactor];
+						scaleMode:mode
+						   factor:factor];
 }
 - (NSSize)_sizeForImageRep:(NSImageRep *)rep
 			   orientation:(PGOrientation)orientation
@@ -2795,6 +2846,70 @@ PGFinderTagImage(NSColor *color)
 - (void)_updateImageViewSizeAllowAnimation:(BOOL)flag
 {
 	[_imageView setSize:[self _sizeForImageRep:_imageView.rep orientation:_imageView.orientation] allowAnimation:flag];
+}
+
+//	MARK: - page display settings (2026/11/17 added)
+
+//	The orientation and the scale can be changed for the document (View menu; Shift
+//	with the keys and the gestures) or for the page being shown only (Page menu; no
+//	modifier). A page's orientation is added to the document's, its scale replaces
+//	the document's. With two pages side by side the pages' settings are ignored (not
+//	forgotten), and everything changes the document.
+- (BOOL)_pageSettingsEnabled
+{
+	return !self._spreadsEnabled;
+}
+- (BOOL)_changesPageForEvent:(NSEvent *)anEvent
+{
+	return self._pageSettingsEnabled && !(anEvent.modifierFlags & NSEventModifierFlagShift);
+}
+- (PGOrientation)_activeNodeOrientation
+{
+	PGOrientation const o = [self.activeNode.resourceAdapter orientationWithBase:YES];
+	return self._pageSettingsEnabled ? PGAddOrientation(o, [self.activeDocument pageOrientationForNode:self.activeNode]) : o;
+}
+- (void)_updateImageOrientation
+{
+	[_thumbnailController pageOrientationsDidChange];
+	if(_spreadComposed || !_imageView.rep) return [self _updateImageViewSizeAllowAnimation:NO];
+	PGOrientation const o = self._activeNodeOrientation;
+	[_imageView setImageRep:_imageView.rep orientation:o size:[self _sizeForImageRep:_imageView.rep orientation:o]];
+	[self _updateAmbientBackground];	//	2026/10/28 added
+}
+- (void)_addOrientation:(PGOrientation)orientation toPage:(BOOL)page
+{
+	PGDocument *const doc = self.activeDocument;
+	if(page && self._pageSettingsEnabled) {
+		PGNode *const node = self.activeNode;
+		if(!node) return;
+		[doc setPageOrientation:PGAddOrientation([doc pageOrientationForNode:node], orientation) forNode:node];
+		[self _updateImageOrientation];
+	} else doc.baseOrientation = PGAddOrientation(doc.baseOrientation, orientation);
+}
+- (void)_setScaleMode:(PGImageScaleMode)mode ofPage:(BOOL)page
+{
+	PGDocument *const doc = self.activeDocument;
+	if(page && self._pageSettingsEnabled) {
+		if(!self.activeNode) return;
+		[doc setPageScaleMode:mode factor:1.0f forNode:self.activeNode];
+		[self _updateImageViewSizeAllowAnimation:YES];
+	} else {
+		//	the page being shown follows the document again, else nothing would be seen to change
+		[doc removePageScaleForNode:self.activeNode];
+		doc.imageScaleMode = mode;	//	see -documentImageScaleDidChange:
+	}
+}
+- (void)_setScaleFactor:(CGFloat)factor animate:(BOOL)flag ofPage:(BOOL)page
+{
+	PGDocument *const doc = self.activeDocument;
+	if(page && self._pageSettingsEnabled) {
+		if(!self.activeNode) return;
+		[doc setPageScaleMode:PGConstantFactorScale factor:factor forNode:self.activeNode];
+		[self _updateImageViewSizeAllowAnimation:flag];
+	} else {
+		[doc removePageScaleForNode:self.activeNode];
+		[doc setImageScaleFactor:factor animate:flag];
+	}
 }
 - (void)_updateNodeIndex
 {
@@ -3259,6 +3374,34 @@ PGFinderTagImage(NSColor *color)
 		else anItem.state = self.activeDocument.imageScaleMode == tag;
 	}
 	if(@selector(changeImageScaleFactor:) == action) [[PGDocumentController sharedDocumentController].scaleSlider setDoubleValue:log2([[self activeDocument] imageScaleFactor])];
+
+	// Page display settings (2026/11/17 added):
+	if(@selector(revertPageOrientation:) == action || @selector(changePageOrientation:) == action || @selector(changePageImageScaleMode:) == action || @selector(pageZoomIn:) == action || @selector(pageZoomOut:) == action || @selector(resetPageDisplaySettings:) == action || @selector(applyPageDisplaySettingsToAllPages:) == action) {
+		PGDocument *const pageDoc = self.activeDocument;
+		PGNode *const pageNode = self.activeNode;
+		PGImageScaleMode pageMode = pageDoc.imageScaleMode;
+		CGFloat pageFactor = pageDoc.imageScaleFactor;
+		BOOL const enabled = pageNode && self._pageSettingsEnabled;
+		if(enabled) [pageDoc getPageScaleMode:&pageMode factor:&pageFactor forNode:pageNode];
+		if(@selector(revertPageOrientation:) == action) anItem.state = enabled && PGUpright == [pageDoc pageOrientationForNode:pageNode];
+		if(@selector(changePageImageScaleMode:) == action) {
+			//	what the page shows, be it its own scale or the document's
+			if(PGViewFitScale == tag) {
+				if([PGDocumentController sharedDocumentController].fullscreen) [anItem setTitle:NSLocalizedString(@"Fit to Screen", @"Scale image down so the entire thing fits menu item. Two labels, depending on mode.")];
+				else [anItem setTitle:NSLocalizedString(@"Fit to Window", @"Scale image down so the entire thing fits menu item. Two labels, depending on mode.")];
+			}
+			if(!enabled) anItem.state = NSControlStateValueOff;
+			else if(PGConstantFactorScale == tag) anItem.state = pageMode == tag ? PGFuzzyEqualityToCellState(0.0f, log2(pageFactor)) : NSControlStateValueOff;
+			else anItem.state = pageMode == tag;
+		}
+		if(!enabled) return NO;	//	eg, two pages side by side
+		if(PGConstantFactorScale == pageMode) {
+			if(@selector(pageZoomIn:) == action && fabs([_imageView averageScaleFactor] - PGScaleMax) < 0.01f) return NO;
+			if(@selector(pageZoomOut:) == action && fabs([_imageView averageScaleFactor] - PGScaleMin) < 0.01f) return NO;
+		}
+		if(@selector(resetPageDisplaySettings:) == action || @selector(applyPageDisplaySettingsToAllPages:) == action) return [pageDoc hasPageDisplaySettingsForNode:pageNode];
+		return YES;
+	}
 
 	// Sort:
 	if(@selector(changeSortOrder:) == action) anItem.state = (PGSortOrderMask & self.activeDocument.sortOrder) == tag;
@@ -3771,7 +3914,19 @@ proposedFrame.size.width, proposedFrame.size.height); */
 		case PGKeyPadPlus:
 		case PGKeyPadMinus:
 		case PGKeyEquals:
-		case PGKeyMinus: [self zoomKeyDown:anEvent]; return YES;
+		case PGKeyMinus: [self zoomKeyDown:anEvent page:YES]; return YES;	//	2026/11/17 the page (the document with two pages side by side)
+	}
+	//	2026/11/17 added: with two pages side by side the Page menu is disabled, and its
+	//	keys change the document as with Shift
+	if(!modifiers && !self._pageSettingsEnabled) switch(keyCode) {
+		case PGKeyR: [self _addOrientation:PGRotated90CW toPage:NO]; return YES;
+		case PGKeyL: [self _addOrientation:PGRotated90CCW toPage:NO]; return YES;
+		case PGKeyH: [self _addOrientation:PGFlippedHorz toPage:NO]; return YES;
+		case PGKeyV: [self _addOrientation:PGFlippedVert toPage:NO]; return YES;
+		case PGKeyO: [self revertOrientation:self]; return YES;
+		case PGKeyA: [self _setScaleMode:PGConstantFactorScale ofPage:NO]; return YES;
+		case PGKeyF: [self _setScaleMode:PGAutomaticScale ofPage:NO]; return YES;
+		case PGKeyS: [self _setScaleMode:PGViewFitScale ofPage:NO]; return YES;
 	}
 	CGFloat const timerFactor = NSEventModifierFlagOption == modifiers ? 10.0f : 1.0f;
 	PGDocument *const d = self.activeDocument;
@@ -3806,10 +3961,12 @@ proposedFrame.size.width, proposedFrame.size.height); */
 - (void)clipView:(PGClipView *)sender magnifyBy:(CGFloat)amount
 {
 	[_imageView setUsesCaching:NO];
-	[self.activeDocument setImageScaleFactor:MAX(PGScaleMin, MIN([_imageView averageScaleFactor] * (amount / 500.0f + 1.0f), PGScaleMax))];
+	_gestureChangesPage = [self _changesPageForEvent:NSApp.currentEvent];	//	2026/11/17 added
+	[self _setScaleFactor:MAX(PGScaleMin, MIN([_imageView averageScaleFactor] * (amount / 500.0f + 1.0f), PGScaleMax)) animate:YES ofPage:_gestureChangesPage];
 }
 - (void)clipView:(PGClipView *)sender rotateByDegrees:(CGFloat)amount
 {
+	_gestureChangesPage = [self _changesPageForEvent:NSApp.currentEvent];	//	2026/11/17 added
 #if __has_feature(objc_arc)
 	[_clipView scrollCenterTo:[_clipView convertPoint:[_imageView rotateByDegrees:amount adjustingPoint:[_imageView convertPoint:_clipView.center fromView:_clipView]] fromView:_imageView] animation:PGNoAnimation];
 #else
@@ -3829,7 +3986,7 @@ proposedFrame.size.width, proposedFrame.size.height); */
 		case 3: o = PGRotated90CW; break;
 		default: PGAssertNotReached(@"Rotation wasn't simplified into an orientation.");
 	}
-	self.activeDocument.baseOrientation = PGAddOrientation(self.activeDocument.baseOrientation, o);
+	if(PGUpright != o) [self _addOrientation:o toPage:_gestureChangesPage];	//	2026/11/17 the page's or the document's
 }
 
 @end

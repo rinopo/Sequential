@@ -78,6 +78,7 @@ extern NSString *const PGThumbnailControllerContentInsetDidChangeNotification;
 - (void)displayControllerActiveNodeDidChange:(NSNotification *)aNotif;
 - (void)displayControllerActiveNodeWasRead:(NSNotification *)aNotif;
 - (void)clipViewBoundsDidChange:(NSNotification *)aNotif;
+- (void)pageOrientationsDidChange;	//	2026/11/17 added: of any pages; see -[PGDocument pageOrientationForNode:]
 - (void)parentWindowDidResize:(NSNotification *)aNotif;
 - (void)parentWindowWillTransitionToScreenFrame:(NSRect)parentWindowFrame;
 - (void)parentWindowWillBeginSheet:(NSNotification *)aNotif;

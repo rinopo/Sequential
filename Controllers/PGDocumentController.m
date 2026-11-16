@@ -113,6 +113,7 @@ static PGDocumentController *PGSharedDocumentController = nil;
 @interface PGDocumentController ()
 
 @property (nonatomic, weak) IBOutlet NSMenu *orientationMenu;
+@property (nonatomic, weak) IBOutlet NSMenu *pageOrientationMenu;	//	2026/11/17 added: Page > Reorient
 
 @property (nonatomic, weak) IBOutlet NSMenuItem *toggleFullscreen;
 @property (nonatomic, weak) IBOutlet NSMenuItem *zoomIn;
@@ -940,6 +941,8 @@ HandlePostEnterFullScreen(PGFloatingPanelController *panel, BeforeState state) {
 - (void)_awakeAfterLocalizing
 {
 #if __has_feature(objc_arc)
+	for(NSMenuItem *const item in _pageOrientationMenu.itemArray)	//	2026/11/17 added
+		[PGOrientationMenuIconCell addOrientationMenuIconCellToMenuItem:item];
 	for(NSMenuItem *const item in _orientationMenu.itemArray)
 #else
 	for(NSMenuItem *const item in orientationMenu.itemArray)

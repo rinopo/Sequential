@@ -225,6 +225,10 @@ NSString *const PGThumbnailControllerContentInsetDidChangeNotification = @"PGThu
 {
 	[self clipViewBoundsDidChange:nil];
 }
+- (void)pageOrientationsDidChange	//	2026/11/17 added
+{
+	for(NSView *const view in _browser.views) [view setNeedsDisplay:YES];
+}
 - (void)clipViewBoundsDidChange:(NSNotification *)aNotif
 {
 	[_browser redisplayItem:self.displayController.activeNode recursively:NO];
@@ -854,6 +858,12 @@ static NSArray<NSURL *> *PGFileURLsOfNodes(NSArray<PGNode *> *nodes, BOOL neares
 	return r;
 }
 
+- (PGOrientation)thumbnailView:(PGThumbnailView *)sender orientationForItem:(id)item	//	2026/11/17 added
+{
+	//	as the image itself: the pages' orientations are ignored with two pages side by side
+	if([[NSUserDefaults standardUserDefaults] boolForKey:PGTwoPageSpreadKey]) return PGUpright;
+	return [self.document pageOrientationForNode:item];
+}
 - (BOOL)thumbnailView:(PGThumbnailView *)sender hasRealThumbnailForItem:(id)item
 {
 	return [item resourceAdapter].hasRealThumbnail;
