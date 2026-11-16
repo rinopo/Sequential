@@ -55,6 +55,8 @@ extern NSString *const PGPageTransitionDurationKey;	//	2026/10/28 added (millise
 extern NSString *const PGBackgroundStyleKey;	//	2026/10/28 added (PGBackgroundStyle)
 extern NSString *const PGKenBurnsKey;	//	2026/10/28 added (BOOL)
 extern NSString *const PGTwoPageSpreadKey;	//	2026/10/28 added (BOOL)
+extern NSString *const PGInfoShowsPageNumberKey;	//	2026/11/16 added (BOOL)
+extern NSString *const PGInfoNameStyleKey;	//	2026/11/16 added (PGInfoNameStyle)
 
 //	thumbnail prefs pane
 extern NSString *const PGShowThumbnailImageNameKey;	//	2023/10/01 added
@@ -71,6 +73,13 @@ extern NSString *const PGThumbnailSizeFormatKey;	//	2023/10/01 added
 //	navigation prefs pane
 extern NSString *const PGMouseClickActionKey;
 extern NSString *const PGBackwardsInitialLocationKey;
+
+//	2026/11/16 added: which names the Info panel shows
+typedef NS_ENUM(NSInteger, PGInfoNameStyle) {
+	PGInfoNameOnly          = 0,
+	PGInfoNameAndParent     = 1,	//	the default (and the only style before)
+	PGInfoNameAndAllParents = 2,
+};
 
 enum {
 	PGNextPreviousAction = 0,

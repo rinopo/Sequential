@@ -35,11 +35,11 @@
         </window>
         <userDefaultsController representsSharedInstance="YES" id="44" userLabel="Shared User Defaults Controller"/>
         <customView id="563" userLabel="General">
-            <rect key="frame" x="0.0" y="0.0" width="540" height="359"/>
+            <rect key="frame" x="0.0" y="0.0" width="540" height="429"/>
             <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMinY="YES"/>
             <subviews>
                 <textField verticalHuggingPriority="750" fixedFrame="YES" translatesAutoresizingMaskIntoConstraints="NO" id="565">
-                    <rect key="frame" x="18" y="322" width="174" height="17"/>
+                    <rect key="frame" x="18" y="392" width="174" height="17"/>
                     <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMinY="YES"/>
                     <textFieldCell key="cell" lineBreakMode="truncatingMiddle" sendsActionOnEndEditing="YES" alignment="right" title="Background:" id="815">
                         <font key="font" metaFont="system"/>
@@ -48,7 +48,7 @@
                     </textFieldCell>
                 </textField>
                 <matrix verticalHuggingPriority="750" fixedFrame="YES" allowsEmptySelection="NO" translatesAutoresizingMaskIntoConstraints="NO" id="QBh-TR-YhJ">
-                    <rect key="frame" x="193" y="301" width="201" height="38"/>
+                    <rect key="frame" x="193" y="371" width="201" height="38"/>
                     <autoresizingMask key="autoresizingMask" flexibleMinX="YES" flexibleMinY="YES"/>
                     <color key="backgroundColor" name="controlColor" catalog="System" colorSpace="catalog"/>
                     <size key="cellSize" width="201" height="18"/>
@@ -74,7 +74,7 @@
                     </connections>
                 </matrix>
                 <colorWell fixedFrame="YES" translatesAutoresizingMaskIntoConstraints="NO" id="564" customClass="PGColorWell">
-                    <rect key="frame" x="402" y="301" width="118" height="22"/>
+                    <rect key="frame" x="402" y="371" width="118" height="22"/>
                     <autoresizingMask key="autoresizingMask" flexibleMinX="YES" flexibleMinY="YES"/>
                     <color key="color" red="0.0" green="0.0" blue="0.0" alpha="1" colorSpace="calibratedRGB"/>
                     <connections>
@@ -86,7 +86,7 @@
                     </connections>
                 </colorWell>
                 <button fixedFrame="YES" imageHugsTitle="YES" translatesAutoresizingMaskIntoConstraints="NO" id="566">
-                    <rect key="frame" x="195" y="276" width="325" height="18"/>
+                    <rect key="frame" x="195" y="346" width="325" height="18"/>
                     <autoresizingMask key="autoresizingMask" flexibleMinX="YES" flexibleMinY="YES"/>
                     <buttonCell key="cell" type="check" title="Checkerboard" bezelStyle="regularSquare" imagePosition="leading" alignment="left" lineBreakMode="truncatingTail" inset="2" id="816">
                         <behavior key="behavior" changeContents="YES" doesNotDimImage="YES" lightByContents="YES"/>
@@ -97,7 +97,7 @@
                     </connections>
                 </button>
                 <textField verticalHuggingPriority="750" fixedFrame="YES" translatesAutoresizingMaskIntoConstraints="NO" id="B82-Tt-TiI">
-                    <rect key="frame" x="18" y="240" width="174" height="17"/>
+                    <rect key="frame" x="18" y="310" width="174" height="17"/>
                     <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMinY="YES"/>
                     <textFieldCell key="cell" lineBreakMode="truncatingMiddle" sendsActionOnEndEditing="YES" alignment="right" title="Full screen background:" id="YPh-7l-jar">
                         <font key="font" metaFont="system"/>
@@ -106,7 +106,7 @@
                     </textFieldCell>
                 </textField>
                 <matrix verticalHuggingPriority="750" fixedFrame="YES" allowsEmptySelection="NO" translatesAutoresizingMaskIntoConstraints="NO" id="PcP-tl-GIc">
-                    <rect key="frame" x="193" y="219" width="218" height="38"/>
+                    <rect key="frame" x="193" y="289" width="218" height="38"/>
                     <autoresizingMask key="autoresizingMask" flexibleMinX="YES" flexibleMinY="YES"/>
                     <color key="backgroundColor" name="controlColor" catalog="System" colorSpace="catalog"/>
                     <size key="cellSize" width="218" height="18"/>
@@ -132,7 +132,7 @@
                     </connections>
                 </matrix>
                 <textField verticalHuggingPriority="750" fixedFrame="YES" translatesAutoresizingMaskIntoConstraints="NO" id="427">
-                    <rect key="frame" x="18" y="179" width="174" height="17"/>
+                    <rect key="frame" x="18" y="249" width="174" height="17"/>
                     <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMinY="YES"/>
                     <textFieldCell key="cell" lineBreakMode="truncatingMiddle" sendsActionOnEndEditing="YES" alignment="right" title="Full screen:" id="813">
                         <font key="font" metaFont="system"/>
@@ -141,7 +141,7 @@
                     </textFieldCell>
                 </textField>
                 <popUpButton verticalHuggingPriority="750" fixedFrame="YES" imageHugsTitle="YES" translatesAutoresizingMaskIntoConstraints="NO" id="426">
-                    <rect key="frame" x="194" y="174" width="236" height="26"/>
+                    <rect key="frame" x="194" y="244" width="236" height="26"/>
                     <autoresizingMask key="autoresizingMask" flexibleMinX="YES" flexibleMinY="YES"/>
                     <popUpButtonCell key="cell" type="push" bezelStyle="rounded" alignment="left" lineBreakMode="truncatingTail" borderStyle="borderAndBezel" inset="2" id="812">
                         <behavior key="behavior" lightByBackground="YES" lightByGray="YES"/>
@@ -153,7 +153,7 @@
                     </connections>
                 </popUpButton>
                 <button fixedFrame="YES" imageHugsTitle="YES" translatesAutoresizingMaskIntoConstraints="NO" id="679">
-                    <rect key="frame" x="195" y="152" width="325" height="18"/>
+                    <rect key="frame" x="195" y="222" width="325" height="18"/>
                     <autoresizingMask key="autoresizingMask" flexibleMinX="YES" flexibleMinY="YES"/>
                     <buttonCell key="cell" type="check" title="Dim other screens" bezelStyle="regularSquare" imagePosition="leading" alignment="left" lineBreakMode="truncatingTail" inset="2" id="818">
                         <behavior key="behavior" changeContents="YES" doesNotDimImage="YES" lightByContents="YES"/>
@@ -164,7 +164,7 @@
                     </connections>
                 </button>
                 <textField verticalHuggingPriority="750" fixedFrame="YES" translatesAutoresizingMaskIntoConstraints="NO" id="375">
-                    <rect key="frame" x="18" y="111" width="174" height="17"/>
+                    <rect key="frame" x="18" y="181" width="174" height="17"/>
                     <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMinY="YES"/>
                     <textFieldCell key="cell" lineBreakMode="truncatingMiddle" sendsActionOnEndEditing="YES" alignment="right" title="Images:" id="806">
                         <font key="font" metaFont="system"/>
@@ -173,7 +173,7 @@
                     </textFieldCell>
                 </textField>
                 <popUpButton verticalHuggingPriority="750" fixedFrame="YES" imageHugsTitle="YES" translatesAutoresizingMaskIntoConstraints="NO" id="826">
-                    <rect key="frame" x="194" y="105" width="236" height="26"/>
+                    <rect key="frame" x="194" y="175" width="236" height="26"/>
                     <autoresizingMask key="autoresizingMask" flexibleMinX="YES" flexibleMinY="YES"/>
                     <popUpButtonCell key="cell" type="push" title="Scale freely" bezelStyle="rounded" alignment="left" lineBreakMode="truncatingTail" state="on" borderStyle="borderAndBezel" imageScaling="proportionallyDown" inset="2" selectedItem="830" id="827">
                         <behavior key="behavior" lightByBackground="YES" lightByGray="YES"/>
@@ -191,7 +191,7 @@
                     </connections>
                 </popUpButton>
                 <button fixedFrame="YES" imageHugsTitle="YES" translatesAutoresizingMaskIntoConstraints="NO" id="376">
-                    <rect key="frame" x="195" y="82" width="325" height="18"/>
+                    <rect key="frame" x="195" y="152" width="325" height="18"/>
                     <autoresizingMask key="autoresizingMask" flexibleMinX="YES" flexibleMinY="YES"/>
                     <buttonCell key="cell" type="check" title="Antialias when upscaling" bezelStyle="regularSquare" imagePosition="leading" alignment="left" lineBreakMode="truncatingTail" inset="2" id="807">
                         <behavior key="behavior" changeContents="YES" doesNotDimImage="YES" lightByContents="YES"/>
@@ -199,6 +199,44 @@
                     </buttonCell>
                     <connections>
                         <binding destination="44" name="value" keyPath="values.PGAntialiasWhenUpscaling" id="456"/>
+                    </connections>
+                </button>
+                <textField verticalHuggingPriority="750" fixedFrame="YES" translatesAutoresizingMaskIntoConstraints="NO" id="PIf-lb-txt">
+                    <rect key="frame" x="18" y="111" width="174" height="17"/>
+                    <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMinY="YES"/>
+                    <textFieldCell key="cell" lineBreakMode="truncatingMiddle" sendsActionOnEndEditing="YES" alignment="right" title="Info:" id="PIf-lb-cel">
+                        <font key="font" metaFont="system"/>
+                        <color key="textColor" name="controlTextColor" catalog="System" colorSpace="catalog"/>
+                        <color key="backgroundColor" name="controlColor" catalog="System" colorSpace="catalog"/>
+                    </textFieldCell>
+                </textField>
+                <popUpButton verticalHuggingPriority="750" fixedFrame="YES" imageHugsTitle="YES" translatesAutoresizingMaskIntoConstraints="NO" id="PIf-ns-pop">
+                    <rect key="frame" x="194" y="105" width="236" height="26"/>
+                    <autoresizingMask key="autoresizingMask" flexibleMinX="YES" flexibleMinY="YES"/>
+                    <popUpButtonCell key="cell" type="push" title="File name and its container" bezelStyle="rounded" alignment="left" lineBreakMode="truncatingTail" state="on" borderStyle="borderAndBezel" imageScaling="proportionallyDown" inset="2" selectedItem="PIf-n1-itm" id="PIf-ns-cel">
+                        <behavior key="behavior" lightByBackground="YES" lightByGray="YES"/>
+                        <font key="font" metaFont="menu"/>
+                        <menu key="menu" title="OtherViews" id="PIf-ns-mnu">
+                            <items>
+                                <menuItem title="File name only" id="PIf-n0-itm"/>
+                                <menuItem title="File name and its container" state="on" tag="1" id="PIf-n1-itm"/>
+                                <menuItem title="File name and all its containers" tag="2" id="PIf-n2-itm"/>
+                            </items>
+                        </menu>
+                    </popUpButtonCell>
+                    <connections>
+                        <binding destination="44" name="selectedTag" keyPath="values.PGInfoNameStyle" id="PIf-ns-bnd"/>
+                    </connections>
+                </popUpButton>
+                <button fixedFrame="YES" imageHugsTitle="YES" translatesAutoresizingMaskIntoConstraints="NO" id="PIf-pn-btn">
+                    <rect key="frame" x="195" y="82" width="325" height="18"/>
+                    <autoresizingMask key="autoresizingMask" flexibleMinX="YES" flexibleMinY="YES"/>
+                    <buttonCell key="cell" type="check" title="Show page number" bezelStyle="regularSquare" imagePosition="leading" alignment="left" lineBreakMode="truncatingTail" inset="2" id="PIf-pn-cel">
+                        <behavior key="behavior" changeContents="YES" doesNotDimImage="YES" lightByContents="YES"/>
+                        <font key="font" metaFont="system"/>
+                    </buttonCell>
+                    <connections>
+                        <binding destination="44" name="value" keyPath="values.PGInfoShowsPageNumber" id="PIf-pn-bnd"/>
                     </connections>
                 </button>
                 <textField verticalHuggingPriority="750" fixedFrame="YES" translatesAutoresizingMaskIntoConstraints="NO" id="410">

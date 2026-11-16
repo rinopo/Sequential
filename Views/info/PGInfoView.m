@@ -119,6 +119,31 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE. */
 	[self setNeedsDisplay:YES];
 	[self PG_postNotificationName:PGBezelPanelFrameShouldChangeNotification];
 }
+//	2026/11/16 added: the page number is drawn on the outer side of the progress
+//	bar, so it's only shown when the bar is
+- (void)setShowsPageNumber:(BOOL)flag
+{
+	if(!flag == !_showsPageNumber) return;
+	_showsPageNumber = flag;
+	[self setNeedsDisplay:YES];
+	[self PG_postNotificationName:PGBezelPanelFrameShouldChangeNotification];
+}
+- (NSAttributedString *)_pageNumberStringWithIndex:(NSUInteger)index
+{
+	NSMutableParagraphStyle *const style = [[NSParagraphStyle defaultParagraphStyle] mutableCopy];
+	style.alignment = self.originCorner == PGMaxXMinYCorner ? NSTextAlignmentLeft : NSTextAlignmentRight;	//	next to the bar
+	return [[NSAttributedString alloc] initWithString:[NSString stringWithFormat:@"%lu/%lu", (unsigned long)index + 1, (unsigned long)_count] attributes:@{
+		NSFontAttributeName: [NSFont monospacedDigitSystemFontOfSize:[NSFont labelFontSize] weight:NSFontWeightRegular],
+		NSForegroundColorAttributeName: NSColor.whiteColor,
+		NSParagraphStyleAttributeName: style}];
+}
+//	the width of the widest page number (the last page's), so that the panel
+//	doesn't change its size when the page does, and of the gap beside it
+- (CGFloat)_pageNumberWidth
+{
+	if(!_showsPageNumber || !self.showsProgressBar) return 0.0f;
+	return ceil([self _pageNumberStringWithIndex:_count - 1].size.width) + PGTextTotalHorzPadding - PGProgressBarMargin;
+}
 - (void)setIndex:(NSUInteger)anInt
 {
 	if(anInt == _index) return;
@@ -130,7 +155,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE. */
 	if(anInt == _count) return;
 	BOOL const showedProgressBar = self.showsProgressBar;
 	_count = anInt;
-	if(!showedProgressBar != !self.showsProgressBar) [self PG_postNotificationName:PGBezelPanelFrameShouldChangeNotification];
+	if(!showedProgressBar != !self.showsProgressBar || _showsPageNumber) [self PG_postNotificationName:PGBezelPanelFrameShouldChangeNotification];
 	else [self setNeedsDisplay:YES];
 }
 
@@ -171,8 +196,9 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE. */
 
 	if(self.showsProgressBar) {
 		BOOL const canAlignToBackingStore = [self respondsToSelector:@selector(backingAlignedRect:options:)];	//	10.7+
+		CGFloat const pageNumberWidth = [self _pageNumberWidth];	//	2026/11/16
 		CGFloat const origin = self.originCorner == PGMaxXMinYCorner ?
-								NSMaxX(b) - 1.0f - PGProgressBarBorder : PGProgressBarBorder;
+								NSMaxX(b) - 1.0f - PGProgressBarBorder - pageNumberWidth : PGProgressBarBorder + pageNumberWidth;
 		NSRect progressBarRect = NSMakeRect(
 			self.originCorner == PGMinXMinYCorner ? 0.5f + origin : 0.5f + origin - PGProgressBarWidth,
 			0.5f + PGProgressBarBorder, PGProgressBarWidth, PGProgressBarHeight);
@@ -297,10 +323,18 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE. */
 
 		//	[4] draw progress bar outline
 		[progressBarOutline stroke];
+
+		//	[4a] 2026/11/16 draw the page number on the outer side of the progress bar
+		if(pageNumberWidth > 0.0f) {
+			CGFloat const w = pageNumberWidth - PGTextTotalHorzPadding + PGProgressBarMargin;
+			[[self _pageNumberStringWithIndex:_index] drawInRect:NSMakeRect(
+				self.originCorner == PGMaxXMinYCorner ? NSMaxX(b) - PGPaddingSize - PGTextHorzPadding - w : NSMinX(b) + PGPaddingSize + PGTextHorzPadding,
+				NSMinY(b) + PGTextBottomPadding, w, NSHeight(b) - PGTextTotalVertPadding)];
+		}
 	}
 
 	//	[5] draw name of image file
-	CGFloat const progressBarWidth = self.showsProgressBar ? PGProgressBarWidth : 0.0f;
+	CGFloat const progressBarWidth = self.showsProgressBar ? PGProgressBarWidth + [self _pageNumberWidth] : 0.0f;
 	CGFloat const textOffset = self.originCorner == PGMinXMinYCorner ? progressBarWidth : 0.0f;
 	[self.attributedStringValue drawInRect:NSMakeRect(NSMinX(b) + PGPaddingSize + PGTextHorzPadding + textOffset,
 														NSMinY(b) + PGTextBottomPadding,
@@ -323,7 +357,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE. */
 - (NSRect)bezelPanel:(PGBezelPanel *)sender frameForContentRect:(NSRect)aRect scale:(CGFloat)scaleFactor
 {
 	NSSize const messageSize = [self.attributedStringValue size];
-	NSSize const progressBarSize = self.showsProgressBar ? NSMakeSize(PGProgressBarWidth + 1.0f + PGProgressBarMargin * 2.0f, PGProgressBarHeight + 1.0f + PGProgressBarBorder * 2.0f) : NSZeroSize;
+	NSSize const progressBarSize = self.showsProgressBar ? NSMakeSize(PGProgressBarWidth + [self _pageNumberWidth] + 1.0f + PGProgressBarMargin * 2.0f, PGProgressBarHeight + 1.0f + PGProgressBarBorder * 2.0f) : NSZeroSize;
 	CGFloat const scaledMarginSize = PGMarginSize * scaleFactor;
 	NSRect frame = NSIntersectionRect(
 		NSMakeRect(

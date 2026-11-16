@@ -29,3 +29,8 @@
 "Show file name" = "Show file name";
 "Thumbnail container:" = "Thumbnail container:";
 "Show counts and sizes" = "Show counts and sizes";
+"Info:" = "情報:";
+"File name only" = "ファイル名のみ";
+"File name and its container" = "ファイル名と親コンテナ";
+"File name and all its containers" = "ファイル名とすべての親コンテナ";
+"Show page number" = "ページ番号を表示";

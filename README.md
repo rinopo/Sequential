@@ -66,6 +66,8 @@ macOS 27 or later. Changes compared to chuchusoft's 2.6.0:
   only opened when they're needed
 - Page Down and Page Up go to the next and previous folder or archive
 - animated WebP (and APNG and HEICS) images are animated like GIFs
+- Settings > General > Info: show the page number (eg, 3/120) and choose
+  how many container names are shown with the file name
 - the Keyboard Shortcuts help page lists all shortcuts
 - fixed a crash when pressing a key whose menu shortcut has no target
 

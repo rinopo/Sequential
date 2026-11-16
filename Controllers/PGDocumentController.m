@@ -74,6 +74,8 @@ NSString *const PGPageTransitionDurationKey = @"PGPageTransitionDuration";	//	20
 NSString *const PGBackgroundStyleKey = @"PGBackgroundStyle";	//	2026/10/28 added
 NSString *const PGKenBurnsKey = @"PGKenBurns";	//	2026/10/28 added
 NSString *const PGTwoPageSpreadKey = @"PGTwoPageSpread";	//	2026/10/28 added
+NSString *const PGInfoShowsPageNumberKey = @"PGInfoShowsPageNumber";	//	2026/11/16 added
+NSString *const PGInfoNameStyleKey = @"PGInfoNameStyle";	//	2026/11/16 added
 
 //	thumbnail prefs pane
 NSString *const PGShowThumbnailImageNameKey = @"PGShowThumbnailImageName";	//	2023/10/01 added
@@ -226,6 +228,8 @@ static PGDocumentController *PGSharedDocumentController = nil;
 		PGBackgroundStyleKey: @(PGAmbientBackground),
 		PGKenBurnsKey: @NO,
 		PGTwoPageSpreadKey: @NO,
+		PGInfoShowsPageNumberKey: @NO,
+		PGInfoNameStyleKey: @(PGInfoNameAndParent),
 
 		PGShowThumbnailImageNameKey: @NO,
 		PGShowThumbnailImageSizeKey: @NO,

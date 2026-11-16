@@ -1839,7 +1839,9 @@ PGFinderTagImage(NSColor *color)
 {
 	NSParameterAssert(aNotif);
 	PGNode *const node = aNotif.userInfo[PGDocumentNodeKey];
-	if(self.activeNode == node || self.activeNode.parentNode == node) [self _updateInfoPanelText]; // The parent may be displayed too, depending.
+	//	the parents may be displayed too, depending (2026/11/16 all of them, not only the first)
+	for(PGNode *shown = self.activeNode; shown; shown = shown.parentNode)
+		if(shown == node) return [self _updateInfoPanelText];
 }
 - (void)documentNodeIsViewableDidChange:(NSNotification *)aNotif
 {
@@ -2896,8 +2898,15 @@ PGFinderTagImage(NSColor *color)
 	PGNode *const node = self.activeNode;
 	if(node) {
 		text = node.identifier.displayName;
-		PGNode *const parent = node.parentNode;
-		if(parent.parentNode) text = [NSString stringWithFormat:@"%@ %C %@", parent.identifier.displayName, (unichar)0x25B8, text];
+		//	2026/11/16 Settings > General > Info chooses which containers' names are shown
+		PGInfoNameStyle const style = [NSUserDefaults.standardUserDefaults integerForKey:PGInfoNameStyleKey];
+		if(PGInfoNameAndAllParents == style) {
+			for(PGNode *parent = node.parentNode; parent; parent = parent.parentNode)
+				text = [NSString stringWithFormat:@"%@ %C %@", parent.identifier.displayName, (unichar)0x25B8, text];
+		} else if(PGInfoNameOnly != style) {
+			PGNode *const parent = node.parentNode;
+			if(parent.parentNode) text = [NSString stringWithFormat:@"%@ %C %@", parent.identifier.displayName, (unichar)0x25B8, text];
+		}
 	} else text = NSLocalizedString(@"No image", @"Label for when no image is being displayed in the window.");
 	//	2026/10/28 two pages side by side
 	if(node && _spreadShown && _spreadPartner) text = [text stringByAppendingFormat:@" + %@", _spreadPartner.identifier.displayName];
@@ -3078,17 +3087,22 @@ PGFinderTagImage(NSColor *color)
 		_graphicPanel = [[PGAlertView PG_bezelPanel] retain];
 		_infoPanel = [[PGInfoView PG_bezelPanel] retain];
 #endif
+		((PGInfoView *)_infoPanel.contentView).showsPageNumber = [NSUserDefaults.standardUserDefaults boolForKey:PGInfoShowsPageNumberKey];	//	2026/11/16
 		[self _updateInfoPanelText];
 
 		[[PGPreferenceWindowController sharedPrefController] PG_addObserver:self selector:@selector(prefControllerBackgroundPatternColorDidChange:) name:PGPreferenceWindowControllerBackgroundPatternColorDidChangeNotification];
 		[[PGPreferenceWindowController sharedPrefController] PG_addObserver:self selector:@selector(prefControllerBackgroundColorUsedInFullScreenDidChange:) name:PGPreferenceWindowControllerBackgroundColorUsedInFullScreenDidChangeNotification];
 		[[NSUserDefaults standardUserDefaults] addObserver:self forKeyPath:PGImageScaleConstraintKey options:kNilOptions context:NULL];
+		[[NSUserDefaults standardUserDefaults] addObserver:self forKeyPath:PGInfoShowsPageNumberKey options:kNilOptions context:NULL];	//	2026/11/16
+		[[NSUserDefaults standardUserDefaults] addObserver:self forKeyPath:PGInfoNameStyleKey options:kNilOptions context:NULL];	//	2026/11/16
 	}
 	return self;
 }
 - (void)dealloc
 {
 	[[NSUserDefaults standardUserDefaults] removeObserver:self forKeyPath:PGImageScaleConstraintKey];
+	[[NSUserDefaults standardUserDefaults] removeObserver:self forKeyPath:PGInfoShowsPageNumberKey];
+	[[NSUserDefaults standardUserDefaults] removeObserver:self forKeyPath:PGInfoNameStyleKey];
 	[self PG_cancelPreviousPerformRequests];
 	[self PG_removeObserver];
 	[self _setImageView:nil];
@@ -3123,6 +3137,9 @@ PGFinderTagImage(NSColor *color)
 - (void)observeValueForKeyPath:(NSString *)keyPath ofObject:(id)object change:(NSDictionary *)change context:(void *)context
 {
 	if(PGEqualObjects(keyPath, PGImageScaleConstraintKey)) [self _updateImageViewSizeAllowAnimation:YES];
+	else if(PGEqualObjects(keyPath, PGInfoShowsPageNumberKey))
+		((PGInfoView *)_infoPanel.contentView).showsPageNumber = [NSUserDefaults.standardUserDefaults boolForKey:PGInfoShowsPageNumberKey];
+	else if(PGEqualObjects(keyPath, PGInfoNameStyleKey)) [self _updateInfoPanelText];
 	else [super observeValueForKeyPath:keyPath ofObject:object change:change context:context];
 }
 
