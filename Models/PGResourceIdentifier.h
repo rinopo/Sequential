@@ -48,6 +48,7 @@ extern NSString *const PGDisplayableIdentifierDisplayNameDidChangeNotification;
 @property(readonly) BOOL isFileIdentifier;
 
 - (PGResourceIdentifier *)subidentifierWithIndex:(NSInteger)index;
+- (void)setEntryIndex:(NSInteger)index;	//	2026/11/16 added: for a subidentifier whose entry moved in its (rewritten) archive; changes -hash
 
 - (NSURL *)superURLByFollowingAliases:(BOOL)flag; // Our URL, or our superidentifier's otherwise.
 - (NSURL *)URLByFollowingAliases:(BOOL)flag;

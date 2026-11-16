@@ -27,6 +27,12 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE. */
 // Models
 #import "PGNode.h"
 #import "PGContainerAdapter.h"
+#pragma clang diagnostic push
+	//	as in PGArchiveAdapter.m, for the XADMaster headers
+	#pragma clang diagnostic ignored "-Wnewline-eof"
+	#pragma clang diagnostic ignored "-Wsign-compare"
+	#import "PGArchiveAdapter.h"	//	2026/11/16 added
+#pragma clang diagnostic pop
 #import "PGGenericImageAdapter.h"
 #import "PGResourceIdentifier.h"
 #import "PGSubscription.h"
@@ -279,15 +285,25 @@ NSString *const PGDocumentUpdateRecursivelyKey = @"PGDocumentUpdateRecursively";
 	NSMutableDictionary<NSURL *, PGNode *> *const parents = [NSMutableDictionary dictionary];
 	NSMutableArray<NSURL *> *const URLs = [NSMutableArray array];
 	NSMutableArray<PGNode *> *const trashable = [NSMutableArray array];
+	//	2026/11/16 images in zip files are removed from them by their archive adapter
+	NSMapTable<PGArchiveAdapter *, NSMutableArray<PGNode *> *> *const archiveNodes = [NSMapTable strongToStrongObjectsMapTable];
 	for(PGNode *const node in nodes) {
 		PGResourceIdentifier *const ident = node.identifier;
 		NSURL *const URL = ident.isFileIdentifier ? ident.URL : nil;
-		if(!URL) continue;
+		if(!URL) {
+			PGArchiveAdapter *const adapter = [PGArchiveAdapter adapterForMovingNodeToTrash:node];
+			if(!adapter) continue;
+			if(![archiveNodes objectForKey:adapter]) [archiveNodes setObject:[NSMutableArray array] forKey:adapter];
+			[[archiveNodes objectForKey:adapter] addObject:node];
+			continue;
+		}
 		[URLs addObject:URL];
 		[trashable addObject:node];
 		if(node.parentNode) parents[URL] = node.parentNode;
 	}
-	if(!URLs.count) return NSBeep();
+	if(!URLs.count && !archiveNodes.count) return NSBeep();
+	for(PGArchiveAdapter *const adapter in archiveNodes) [adapter moveNodesToTrash:[archiveNodes objectForKey:adapter]];
+	if(!URLs.count) return;
 	for(PGNode *const node in trashable) [node removeFromDocument];
 
 	static dispatch_queue_t queue = nil;	//	serial, so that the files are moved in order
@@ -324,6 +340,13 @@ NSString *const PGDocumentUpdateRecursivelyKey = @"PGDocumentUpdateRecursively";
 			[self.undoManager setActionName:NSLocalizedString(@"Move to Trash", @"Undo action name.")];
 		});
 	});
+}
+- (BOOL)canMoveNodeToTrash:(PGNode *)node
+{
+	if(!node) return NO;
+	PGResourceIdentifier *const ident = node.identifier;
+	if(ident.isFileIdentifier && ident.URL) return YES;
+	return nil != [PGArchiveAdapter adapterForMovingNodeToTrash:node];
 }
 - (void)_putBackTrashedFiles:(NSDictionary<NSURL *, NSURL *> *)trashURLs parents:(NSDictionary<NSURL *, PGNode *> *)parents
 {
@@ -458,6 +481,17 @@ NSString *const PGDocumentUpdateRecursivelyKey = @"PGDocumentUpdateRecursively";
 	BOOL const isEventForRootNode = ident ? [_rootIdentifier isEqual:ident] :
 		[[NSURL fileURLWithPath:path] isEqual:[_rootIdentifier URLByFollowingAliases:NO]];
 
+	if((flags & (NOTE_DELETE | NOTE_REVOKE | NOTE_RENAME)) && _replacedRootFilePath && aNotif.object == _subscription &&
+	   [NSFileManager.defaultManager fileExistsAtPath:_replacedRootFilePath]) {
+		//	2026/11/16 the file was replaced by a new version of itself, not
+		//	deleted or moved (see -[PGArchiveAdapter moveNodesToTrash:]); the
+		//	subscription is to the old file (and its path is that of the old
+		//	file, wherever it is now), so the path is the one that was noted
+		[_subscription PG_removeObserver:self name:PGSubscriptionEventDidOccurNotification];
+		_subscription = [_rootIdentifier subscriptionWithDescendents:YES];
+		[_subscription PG_addObserver:self selector:@selector(subscriptionEventDidOccur:) name:PGSubscriptionEventDidOccurNotification];
+		return;
+	}
 	if(isDeleteOrRevoke) {
 		//	if the root node represents the deleted object then this
 		//	document must be removed from the Open Recent sub-menu;

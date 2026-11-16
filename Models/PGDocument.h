@@ -115,7 +115,9 @@ extern NSString *const PGDocumentUpdateRecursivelyKey;
 @property (readonly) NSUndoManager *undoManager;
 @property (nonatomic, assign) BOOL hasDeferredArchives;	//	2026/10/28 added: some archives weren't loaded with their folder
 @property (nonatomic, assign) NSInteger tagFilter;	//	2026/10/28 added: the label number of the Finder tag the pages must have, PGAnyTagFilter, or 0 (not saved)
-- (void)moveNodesToTrash:(NSArray<PGNode *> *)nodes;	//	files on disk only; beeps if there are none
+- (void)moveNodesToTrash:(NSArray<PGNode *> *)nodes;	//	files on disk, and images in zip files on disk (2026/11/16; not undoable); beeps if there are none
+- (BOOL)canMoveNodeToTrash:(PGNode *)node;	//	2026/11/16 added
+@property (nonatomic, copy) NSString *replacedRootFilePath;	//	2026/11/16 added: the document's file is being replaced by a new version at this path; see -[PGArchiveAdapter moveNodesToTrash:]
 - (BOOL)setFinderTags:(NSArray<NSString *> *)tags ofNode:(PGNode *)node actionName:(NSString *)actionName;
 
 - (void)noteNode:(PGNode *)node willRemoveNodes:(NSArray *)anArray;

@@ -2482,12 +2482,10 @@ PGFinderTagImage(NSColor *color)
 }
 - (void)_moveActiveNodeToTrash	//	2026/10/28 added
 {
-	//	only files on disk (not, eg, images in archives); removing the node shows
-	//	the next image (see -documentWillRemoveNodes:) and a running timer continues
+	//	only files on disk and (2026/11/16) images in zip files on disk; removing the node
+	//	shows the next image (see -documentWillRemoveNodes:) and a running timer continues
 	PGNode *const node = self.activeNode;
-	PGResourceIdentifier *const ident = node.identifier;
-	NSURL *const URL = ident.isFileIdentifier && node.isViewable ? ident.URL : nil;
-	if(!URL) return NSBeep();
+	if(!node.isViewable || ![self.activeDocument canMoveNodeToTrash:node]) return NSBeep();
 	//	restart the countdown now; moving to the Trash can take a while (eg, on
 	//	slow volumes) and the timer would otherwise keep counting down meanwhile
 	if(self.timerRunning) self.timerRunning = YES;
@@ -3307,9 +3305,9 @@ PGFinderTagImage(NSColor *color)
 	if(!activeNodeIdent.isFileIdentifier || !activeNodeIdent.URL) {
 		if(@selector(setAsDesktopPicture:) == action) return NO;
 	}
-	PGResourceIdentifier *const selectedNodeIdent = self.selectedNode.identifier;
-	if(!selectedNodeIdent.isFileIdentifier || !selectedNodeIdent.URL) {
-		if(@selector(moveToTrash:) == action) return NO;
+	if(@selector(moveToTrash:) == action) {
+		//	2026/11/16 also for the images in zip files
+		if(![self.activeDocument canMoveNodeToTrash:self.selectedNode]) return NO;
 	}
 	if(!self.canShowInfo) {
 		if(@selector(toggleInfo:) == action) return NO;

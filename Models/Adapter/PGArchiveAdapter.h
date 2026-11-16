@@ -40,4 +40,8 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE. */
 
 - (NSArray *)nodesUnderPath:(NSString *)path parentAdapter:(PGContainerAdapter *)parent remainingIndexes:(NSMutableIndexSet *)indexes;
 
+//	2026/11/16 added: Move to Trash for the images in a zip file on disk
++ (PGArchiveAdapter *)adapterForMovingNodeToTrash:(PGNode *)node;	//	nil if the node can't be removed from its archive
+- (void)moveNodesToTrash:(NSArray<PGNode *> *)nodes;	//	extracts them into the Trash and rewrites the file; can't be undone
+
 @end

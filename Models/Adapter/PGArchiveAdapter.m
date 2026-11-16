@@ -24,6 +24,8 @@ ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE. */
 
 #import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
+#import <sys/stat.h>
+#import <fcntl.h>
 
 #pragma clang diagnostic push
 	//	recent XADMaster sources have EOF and sign comparison issues
@@ -41,6 +43,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE. */
 
 // Controllers
 #import "PGDocumentController.h"
+#import "PGDisplayController.h"
 
 // Other Sources
 #import "PGFoundationAdditions.h"
@@ -72,6 +75,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE. */
 
 - (instancetype)initWithArchive:(XADArchive *)archive entry:(int)entry NS_DESIGNATED_INITIALIZER;
 - (instancetype)init NS_UNAVAILABLE;
+- (void)setArchive:(XADArchive *)archive entry:(int)entry;	//	2026/11/16 added: the archive file was rewritten
 
 @end
 
@@ -112,6 +116,8 @@ StringAtDepth(NSInteger depth) {
 @property (nonatomic, assign) BOOL addedLoadingThumbnail;	//	2026/10/28 added
 @property (nonatomic, assign) BOOL deferred;	//	2026/10/28 added: not loaded with its folder
 @property (nonatomic, assign) BOOL triedDeferredThumbnail;	//	2026/10/28 added
+@property (nonatomic, strong) NSMutableArray<PGNode *> *pendingRemovals;	//	2026/11/16 added
+@property (nonatomic, assign) BOOL removalScheduled;	//	2026/11/16 added
 
 - (void)_threaded_setError:(NSError *)error forNode:(PGNode *)node;
 - (void)_updateThumbnailsOfChildren;
@@ -172,6 +178,294 @@ PGThumbnailOfFirstImageInArchive(NSString *path, CGFloat maxPixelSize)
 	NSImage *const image = [[NSImage alloc] initWithCGImage:thumbnail size:NSZeroSize];
 	CGImageRelease(thumbnail);
 	return image;
+}
+
+
+//	MARK: - 2026/11/16 added: removing entries from a zip file
+
+//	XADMaster can't write archives, so this writes a copy of a zip file without
+//	some of its entries: the local records of the other entries are copied as
+//	they are (nothing is recompressed) and the central directory is written
+//	again with the new offsets. The caller replaces the original file with the
+//	copy, so a failure at any point leaves the original as it was. Anything
+//	unusual (multi-disk archives, data after the central directory, etc) is
+//	refused instead of guessed at
+
+typedef struct {
+	size_t record;	//	of the central directory record, in the directory
+	size_t recordLength;
+	size_t nameLength;
+	size_t offsetField;	//	of the 64-bit local header offset, in the directory (0 if it's 32-bit)
+	off_t localOffset;
+	off_t end;	//	of the local record (the next one's offset)
+	off_t newOffset;
+	BOOL remove;
+} PGZipEntry;
+
+static uint16_t PGZipU16(uint8_t const *p) { return (uint16_t)(p[0] | p[1] << 8); }
+static uint32_t PGZipU32(uint8_t const *p) { return (uint32_t)p[0] | (uint32_t)p[1] << 8 | (uint32_t)p[2] << 16 | (uint32_t)p[3] << 24; }
+static uint64_t PGZipU64(uint8_t const *p) { return (uint64_t)PGZipU32(p) | (uint64_t)PGZipU32(p + 4) << 32; }
+static void PGZipPutU16(uint8_t *p, uint16_t v) { p[0] = (uint8_t)v; p[1] = (uint8_t)(v >> 8); }
+static void PGZipPutU32(uint8_t *p, uint32_t v) { PGZipPutU16(p, (uint16_t)v); PGZipPutU16(p + 2, (uint16_t)(v >> 16)); }
+static void PGZipPutU64(uint8_t *p, uint64_t v) { PGZipPutU32(p, (uint32_t)v); PGZipPutU32(p + 4, (uint32_t)(v >> 32)); }
+
+static BOOL
+PGZipRead(int fd, off_t offset, void *buffer, size_t length)
+{
+	while(length) {
+		ssize_t const n = pread(fd, buffer, length, offset);
+		if(n < 0 && EINTR == errno) continue;
+		if(n <= 0) return NO;
+		buffer = (uint8_t *)buffer + n;
+		offset += n;
+		length -= (size_t)n;
+	}
+	return YES;
+}
+static BOOL
+PGZipWrite(int fd, void const *buffer, size_t length)
+{
+	while(length) {
+		ssize_t const n = write(fd, buffer, length);
+		if(n < 0 && EINTR == errno) continue;
+		if(n <= 0) return NO;
+		buffer = (uint8_t const *)buffer + n;
+		length -= (size_t)n;
+	}
+	return YES;
+}
+static BOOL
+PGZipCopy(int in, int out, off_t offset, off_t length, void *buffer, size_t bufferLength)
+{
+	while(length > 0) {
+		size_t const n = (size_t)MIN(length, (off_t)bufferLength);
+		if(!PGZipRead(in, offset, buffer, n) || !PGZipWrite(out, buffer, n)) return NO;
+		offset += n;
+		length -= n;
+	}
+	return YES;
+}
+
+//	dataOffsets: where the data of each entry to remove starts in the file
+//	(XADDataOffsetKey); the AppleDouble file of a removed entry (__MACOSX/._name)
+//	is removed with it. removedBytes gets the byte ranges that were left out
+static BOOL
+PGZipWriteCopyRemovingEntries(NSString *sourcePath, NSString *destinationPath, NSIndexSet *dataOffsets, NSMutableIndexSet *removedBytes)
+{
+	enum { PGZipBufferLength = 1 << 20 };
+	BOOL ok = NO;
+	int const in = open(sourcePath.fileSystemRepresentation, O_RDONLY | O_CLOEXEC);
+	if(in < 0) return NO;
+	int out = -1;
+	uint8_t *tail = NULL, *cd = NULL, *z64 = NULL, *buffer = NULL;
+	PGZipEntry *entries = NULL;
+	size_t *sorted = NULL;
+	do {
+		struct stat st;
+		if(fstat(in, &st) || st.st_size < 22) break;
+		off_t const size = st.st_size;
+
+		//	the end of central directory record
+		size_t const tailLength = (size_t)MIN(size, (off_t)(22 + 0xFFFF));
+		tail = malloc(tailLength);
+		if(!tail || !PGZipRead(in, size - (off_t)tailLength, tail, tailLength)) break;
+		ssize_t e = -1;
+		for(ssize_t i = (ssize_t)tailLength - 22; i >= 0; i--) {
+			if(PGZipU32(tail + i) != 0x06054b50 || (size_t)i + 22 + PGZipU16(tail + i + 20) != tailLength) continue;
+			e = i;
+			break;
+		}
+		if(e < 0) break;
+		uint8_t *const eocd = tail + e;
+		size_t const eocdLength = tailLength - (size_t)e;
+		off_t const eocdOffset = size - (off_t)eocdLength;
+		if(PGZipU16(eocd + 4) || PGZipU16(eocd + 6)) break;	//	more than one disk
+		uint64_t count = PGZipU16(eocd + 10), cdSize = PGZipU32(eocd + 12), cdOffset = PGZipU32(eocd + 16);
+		if(PGZipU16(eocd + 8) != count) break;
+		off_t cdEnd = eocdOffset;
+
+		//	Zip64
+		uint8_t locator[20];
+		size_t z64Length = 0;
+		BOOL const isZip64 = eocdOffset >= 20 && PGZipRead(in, eocdOffset - 20, locator, sizeof(locator)) && 0x07064b50 == PGZipU32(locator);
+		if(isZip64) {
+			uint64_t const z64Offset = PGZipU64(locator + 8);
+			uint8_t head[56];
+			if(z64Offset > (uint64_t)eocdOffset || z64Offset + 56 > (uint64_t)eocdOffset - 20) break;
+			if(!PGZipRead(in, (off_t)z64Offset, head, sizeof(head)) || PGZipU32(head) != 0x06064b50) break;
+			uint64_t const length = PGZipU64(head + 4) + 12;
+			if(length < 56 || length > (1 << 20) || z64Offset + length != (uint64_t)eocdOffset - 20) break;
+			z64Length = (size_t)length;
+			z64 = malloc(z64Length);
+			if(!z64 || !PGZipRead(in, (off_t)z64Offset, z64, z64Length)) break;
+			if(PGZipU32(z64 + 16) || PGZipU32(z64 + 20)) break;
+			count = PGZipU64(z64 + 32);
+			if(PGZipU64(z64 + 24) != count) break;
+			cdSize = PGZipU64(z64 + 40);
+			cdOffset = PGZipU64(z64 + 48);
+			cdEnd = (off_t)z64Offset;
+		}
+		if(cdSize > (1u << 30) || cdOffset > (uint64_t)cdEnd || cdOffset + cdSize != (uint64_t)cdEnd || count > cdSize / 46) break;
+
+		//	the central directory
+		cd = malloc((size_t)cdSize ?: 1);
+		if(!cd || !PGZipRead(in, (off_t)cdOffset, cd, (size_t)cdSize)) break;
+		entries = calloc((size_t)count ?: 1, sizeof(PGZipEntry));
+		sorted = calloc((size_t)count ?: 1, sizeof(size_t));
+		if(!entries || !sorted) break;
+		size_t p = 0;
+		uint64_t n = 0;
+		for(; n < count; n++) {
+			if(p + 46 > cdSize || PGZipU32(cd + p) != 0x02014b50) break;
+			size_t const nameLength = PGZipU16(cd + p + 28), extraLength = PGZipU16(cd + p + 30), commentLength = PGZipU16(cd + p + 32);
+			size_t const length = 46 + nameLength + extraLength + commentLength;
+			if(p + length > cdSize) break;
+			PGZipEntry *const entry = entries + n;
+			entry->record = p;
+			entry->recordLength = length;
+			entry->nameLength = nameLength;
+			uint64_t offset = PGZipU32(cd + p + 42);
+			if(0xFFFFFFFF == offset) {
+				//	it's in the Zip64 extra field, after the sizes that are there too
+				BOOL found = NO;
+				size_t x = p + 46 + nameLength;
+				size_t const extraEnd = x + extraLength;
+				while(x + 4 <= extraEnd) {
+					size_t const fieldLength = PGZipU16(cd + x + 2);
+					if(x + 4 + fieldLength > extraEnd) break;
+					if(1 == PGZipU16(cd + x)) {
+						size_t q = x + 4;
+						if(0xFFFFFFFF == PGZipU32(cd + p + 24)) q += 8;
+						if(0xFFFFFFFF == PGZipU32(cd + p + 20)) q += 8;
+						if(q + 8 <= x + 4 + fieldLength) {
+							offset = PGZipU64(cd + q);
+							entry->offsetField = q;
+							found = YES;
+						}
+						break;
+					}
+					x += 4 + fieldLength;
+				}
+				if(!found) break;
+			}
+			if(offset >= cdOffset) break;
+			entry->localOffset = (off_t)offset;
+			sorted[n] = (size_t)n;
+			p += length;
+		}
+		if(n != count || p != cdSize) break;
+
+		//	a local record is taken to end where the next one starts, so that
+		//	its length doesn't depend on its data descriptor, etc
+		PGZipEntry *const sortEntries = entries;
+		qsort_b(sorted, (size_t)count, sizeof(size_t), ^int(void const *a, void const *b) {
+			off_t const x = sortEntries[*(size_t const *)a].localOffset, y = sortEntries[*(size_t const *)b].localOffset;
+			return x < y ? -1 : x > y;
+		});
+		BOOL valid = YES;
+		for(size_t k = 0; k < count; k++) {
+			PGZipEntry *const entry = entries + sorted[k];
+			entry->end = k + 1 < count ? entries[sorted[k + 1]].localOffset : (off_t)cdOffset;
+			if(entry->end <= entry->localOffset) valid = NO;
+		}
+		if(!valid) break;
+
+		//	the entries to remove
+		for(NSUInteger d = dataOffsets.firstIndex; valid && NSNotFound != d; d = [dataOffsets indexGreaterThanIndex:d]) {
+			PGZipEntry *found = NULL;
+			for(size_t k = (size_t)count; k-- > 0;) {
+				if((uint64_t)entries[sorted[k]].localOffset >= d) continue;
+				found = entries + sorted[k];
+				break;
+			}
+			uint8_t header[30];
+			if(!found || !PGZipRead(in, found->localOffset, header, sizeof(header)) || PGZipU32(header) != 0x04034b50 ||
+			   (uint64_t)found->localOffset + 30 + PGZipU16(header + 26) + PGZipU16(header + 28) != d) {
+				valid = NO;
+				break;
+			}
+			found->remove = YES;
+			uint8_t const *const name = cd + found->record + 46;
+			size_t const nameLength = found->nameLength;
+			static char const prefix[] = "__MACOSX/";
+			size_t const prefixLength = sizeof(prefix) - 1;
+			if(nameLength >= prefixLength && !memcmp(name, prefix, prefixLength)) continue;
+			size_t directoryLength = nameLength;
+			while(directoryLength && name[directoryLength - 1] != '/') directoryLength--;
+			NSMutableData *const partner = [NSMutableData dataWithBytes:prefix length:prefixLength];
+			[partner appendBytes:name length:directoryLength];
+			[partner appendBytes:"._" length:2];
+			[partner appendBytes:name + directoryLength length:nameLength - directoryLength];
+			for(size_t k = 0; k < count; k++) {
+				if(entries[k].nameLength == partner.length && !memcmp(cd + entries[k].record + 46, partner.bytes, partner.length)) entries[k].remove = YES;
+			}
+		}
+		if(!valid) break;
+
+		//	the local records
+		out = open(destinationPath.fileSystemRepresentation, O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC, st.st_mode & 0777);
+		buffer = malloc(PGZipBufferLength);
+		if(out < 0 || !buffer) break;
+		off_t outOffset = 0, runStart = 0, runEnd = count ? entries[sorted[0]].localOffset : (off_t)cdOffset;
+		uint64_t newCount = 0;
+		for(size_t k = 0; valid && k < count; k++) {
+			PGZipEntry *const entry = entries + sorted[k];
+			if(entry->remove) {
+				valid = PGZipCopy(in, out, runStart, runEnd - runStart, buffer, PGZipBufferLength);
+				outOffset += runEnd - runStart;
+				runStart = runEnd = entry->end;
+				[removedBytes addIndexesInRange:NSMakeRange((NSUInteger)entry->localOffset, (NSUInteger)(entry->end - entry->localOffset))];
+			} else {
+				entry->newOffset = outOffset + (entry->localOffset - runStart);
+				runEnd = entry->end;
+				newCount++;
+			}
+		}
+		if(!valid || !PGZipCopy(in, out, runStart, runEnd - runStart, buffer, PGZipBufferLength)) break;
+		outOffset += runEnd - runStart;
+
+		//	the central directory
+		NSMutableData *const newCD = [NSMutableData data];
+		for(size_t k = 0; k < count; k++) {
+			PGZipEntry const *const entry = entries + k;
+			if(entry->remove) continue;
+			NSUInteger const start = newCD.length;
+			[newCD appendBytes:cd + entry->record length:entry->recordLength];
+			uint8_t *const record = (uint8_t *)newCD.mutableBytes + start;
+			if(entry->offsetField) PGZipPutU64(record + (entry->offsetField - entry->record), (uint64_t)entry->newOffset);
+			else PGZipPutU32(record + 42, (uint32_t)entry->newOffset);	//	never more than it was
+		}
+		uint64_t const newCDOffset = (uint64_t)outOffset, newCDSize = newCD.length;
+		if(!PGZipWrite(out, newCD.bytes, newCD.length)) break;
+		if(isZip64) {
+			PGZipPutU64(z64 + 24, newCount);
+			PGZipPutU64(z64 + 32, newCount);
+			PGZipPutU64(z64 + 40, newCDSize);
+			PGZipPutU64(z64 + 48, newCDOffset);
+			PGZipPutU64(locator + 8, newCDOffset + newCDSize);
+			if(!PGZipWrite(out, z64, z64Length) || !PGZipWrite(out, locator, sizeof(locator))) break;
+		}
+		//	with Zip64, a field that says to use the Zip64 one stays that way
+		if(!isZip64 || PGZipU16(eocd + 8) != 0xFFFF) PGZipPutU16(eocd + 8, (uint16_t)newCount);
+		if(!isZip64 || PGZipU16(eocd + 10) != 0xFFFF) PGZipPutU16(eocd + 10, (uint16_t)newCount);
+		if(!isZip64 || PGZipU32(eocd + 12) != 0xFFFFFFFF) PGZipPutU32(eocd + 12, (uint32_t)newCDSize);
+		if(!isZip64 || PGZipU32(eocd + 16) != 0xFFFFFFFF) PGZipPutU32(eocd + 16, (uint32_t)newCDOffset);
+		if(!PGZipWrite(out, eocd, eocdLength)) break;
+		if(fsync(out)) break;
+		ok = YES;
+	} while(0);
+	free(tail);
+	free(cd);
+	free(z64);
+	free(buffer);
+	free(entries);
+	free(sorted);
+	close(in);
+	if(out >= 0) {
+		if(close(out)) ok = NO;
+		if(!ok) unlink(destinationPath.fileSystemRepresentation);
+	}
+	return ok;
 }
 
 @implementation PGArchiveAdapter
@@ -244,6 +538,177 @@ PGThumbnailOfFirstImageInArchive(NSString *path, CGFloat maxPixelSize)
 			if(strongSelf && strongSelf.node.resourceAdapter == strongSelf) [strongSelf _setRealThumbnail:image];
 		});
 	});
+}
+
+//	MARK: - 2026/11/16 added: Move to Trash for the images in a zip file
+
+//	The image is extracted into the Trash, and the zip file is replaced with a
+//	copy that doesn't have it (see PGZipWriteCopyRemovingEntries()). Only for
+//	zip files on disk: XADMaster can't write archives, and the other formats
+//	aren't as simple to rewrite. This can't be undone with Edit > Undo
+- (BOOL)_canRemoveEntries
+{
+	PGDataProvider *const dataProvider = self.dataProvider;
+	if(_deferred || !_archive || dataProvider.archive) return NO;	//	not archives in archives
+	PGResourceIdentifier *const ident = dataProvider.identifier;
+	if(!ident.isFileIdentifier || !ident.URL) return NO;
+	return [_archive.formatName isEqualToString:@"Zip"] && _archive.allFilenames.count <= 1;
+}
++ (PGArchiveAdapter *)adapterForMovingNodeToTrash:(PGNode *)node
+{
+	XADArchive *const archive = [node.resourceAdapter.dataProvider archive];
+	if(!archive) return nil;
+	for(PGContainerAdapter *adapter = node.parentAdapter; adapter; adapter = adapter.parentAdapter) {
+		if(![adapter isKindOfClass:[PGArchiveAdapter class]]) continue;
+		PGArchiveAdapter *const archiveAdapter = (PGArchiveAdapter *)adapter;
+		return archiveAdapter.archive == archive && [archiveAdapter _canRemoveEntries] ? archiveAdapter : nil;
+	}
+	return nil;
+}
+- (void)moveNodesToTrash:(NSArray<PGNode *> *)nodes
+{
+	NSAssert(NSThread.isMainThread, @"");
+	if(!_pendingRemovals) _pendingRemovals = [NSMutableArray array];
+	[_pendingRemovals addObjectsFromArray:nodes];
+	//	replacing the file looks like its deletion to the document's subscription
+	PGDocument *const document = self.document;
+	if(document.node == self.node) document.replacedRootFilePath = self.dataProvider.identifier.URL.path;
+	//	as for files, the nodes are removed first so that the next image is
+	//	shown at once; if the archive can't be changed, it's loaded again
+	for(PGNode *const node in nodes) [node removeFromDocument];
+	if(_removalScheduled) return;	//	it takes all that are pending when it starts
+	_removalScheduled = YES;
+	static dispatch_queue_t queue;
+	static dispatch_once_t once;
+	dispatch_once(&once, ^{
+		queue = dispatch_queue_create("PGArchiveAdapter.removals", DISPATCH_QUEUE_SERIAL);
+	});
+	dispatch_async(queue, ^{
+		@autoreleasepool {
+			[self _threaded_removePendingEntries];
+		}
+	});
+}
+- (void)_threaded_removePendingEntries
+{
+	NSMutableArray<PGDataProvider *> *const providers = [NSMutableArray array];
+	__block PGResourceIdentifier *firstIdentifier = nil;
+	__block XADArchive *archive = nil;
+	__block NSString *path = nil;
+	dispatch_sync(dispatch_get_main_queue(), ^{
+		for(PGNode *const node in self.pendingRemovals) [providers addObject:node.resourceAdapter.dataProvider];
+		firstIdentifier = self.pendingRemovals.firstObject.identifier;
+		[self.pendingRemovals removeAllObjects];
+		self.removalScheduled = NO;
+		archive = self.archive;
+		path = self.dataProvider.identifier.URL.path;
+	});
+	NSFileManager *const fileManager = [NSFileManager new];
+	BOOL ok = providers.count && archive && path;
+
+	NSMutableIndexSet *const dataOffsets = [NSMutableIndexSet indexSet];
+	if(ok) for(PGDataProvider *const provider in providers) {
+		NSNumber *const offset = provider.archive == archive ? [archive dataForkParserDictionaryForEntry:provider.entry][XADDataOffsetKey] : nil;
+		if(!offset) {
+			ok = NO;
+			break;
+		}
+		[dataOffsets addIndex:offset.unsignedIntegerValue];
+	}
+
+	//	the new file is made on the volume of the archive, then the images are
+	//	extracted into the Trash, and only then is the archive replaced
+	NSURL *const archiveURL = path ? [NSURL fileURLWithPath:path] : nil;
+	NSURL *const replacementDirectory = ok ? [fileManager URLForDirectory:NSItemReplacementDirectory inDomain:NSUserDomainMask appropriateForURL:archiveURL create:YES error:NULL] : nil;
+	NSURL *const replacementURL = [replacementDirectory URLByAppendingPathComponent:archiveURL.lastPathComponent];
+	NSMutableIndexSet *const removedBytes = [NSMutableIndexSet indexSet];
+	ok = ok && replacementURL && PGZipWriteCopyRemovingEntries(path, replacementURL.path, dataOffsets, removedBytes);
+
+	NSMutableArray<NSURL *> *const trashURLs = [NSMutableArray array];
+	if(ok) for(PGDataProvider *const provider in providers) @autoreleasepool {
+		NSString *const name = [archive nameOfEntry:provider.entry].lastPathComponent;
+		NSData *const data = provider.data;	//	nil if it's encrypted, etc
+		NSURL *const directory = [[NSURL fileURLWithPath:NSTemporaryDirectory() isDirectory:YES] URLByAppendingPathComponent:[NSUUID UUID].UUIDString isDirectory:YES];
+		NSURL *const URL = name.length ? [directory URLByAppendingPathComponent:name] : nil;
+		NSURL *trashURL = nil;
+		ok = data && URL && [fileManager createDirectoryAtURL:directory withIntermediateDirectories:YES attributes:nil error:NULL] &&
+			[data writeToURL:URL atomically:NO] && [fileManager trashItemAtURL:URL resultingItemURL:&trashURL error:NULL];
+		[fileManager removeItemAtURL:directory error:NULL];
+		if(trashURL) [trashURLs addObject:trashURL];
+		if(!ok) break;
+	}
+
+	BOOL const replaced = ok && [fileManager replaceItemAtURL:archiveURL withItemAtURL:replacementURL backupItemName:nil options:0 resultingItemURL:NULL error:NULL];
+	if(replacementDirectory) [fileManager removeItemAtURL:replacementDirectory error:NULL];
+	if(!replaced) for(NSURL *const URL in trashURLs) [fileManager removeItemAtURL:URL error:NULL];	//	they're still in the archive
+
+	//	the archive object reads the old file, so it's opened again; an entry
+	//	of the old one is found in the new one by where its data starts
+	XADArchive *newArchive = nil;
+	NSMutableDictionary<NSNumber *, NSNumber *> *const newEntries = [NSMutableDictionary dictionary];
+	if(replaced) {
+		newArchive = [[XADArchive alloc] initWithFile:path delegate:self error:NULL];
+		int const count = newArchive.numberOfEntries;
+		for(int i = 0; i < count; i++) {
+			NSNumber *const offset = [newArchive dataForkParserDictionaryForEntry:i][XADDataOffsetKey];
+			if(offset) newEntries[offset] = @(i);
+		}
+	}
+	dispatch_sync(dispatch_get_main_queue(), ^{
+		if(self.node.resourceAdapter != self) return;	//	eg, the document was closed
+		NSMutableArray<void (^)(void)> *const changes = [NSMutableArray array];
+		if(replaced && newArchive && self.archive == archive &&
+		   [self _getChanges:changes forChildrenOf:self from:archive to:newArchive entries:newEntries removedBytes:removedBytes]) {
+			for(void (^const change)(void) in changes) change();
+			self.archive = newArchive;
+			return;
+		}
+		//	the archive wasn't changed, so its images are shown again, or it was
+		//	but the nodes can't be matched to it
+		if(!replaced) NSBeep();
+		PGDocument *const document = self.document;
+		PGNode *const node = self.node;
+		//	the nodes are replaced by loading the archive again; they're removed
+		//	first so that none of them is the one that's shown meanwhile (see
+		//	-[PGDisplayController documentWillRemoveNodes:])
+		[self setUnsortedChildren:@[] presortedOrder:PGUnsorted];
+		[PGResourceAdapter reloadNodeIgnoringMaxDepth:node];	//	replaces this adapter
+		PGResourceAdapter *const adapter = node.resourceAdapter;
+		PGNode *const restored = (replaced ? nil : [adapter nodeForIdentifier:firstIdentifier]) ?: [adapter sortedViewableNodeFirst:YES];
+		if(restored) [document.displayController activateNode:restored];
+	});
+}
+- (BOOL)_getChanges:(NSMutableArray<void (^)(void)> *)changes
+        forChildrenOf:(PGContainerAdapter *)adapter
+        from:(XADArchive *)oldArchive
+        to:(XADArchive *)newArchive
+        entries:(NSDictionary<NSNumber *, NSNumber *> *)newEntries
+        removedBytes:(NSIndexSet *)removedBytes
+{
+	for(PGNode *const child in adapter.unsortedChildren) {
+		PGResourceAdapter *const childAdapter = child.resourceAdapter;
+		PGDataProvider *const provider = childAdapter.dataProvider;
+		PGDisplayableIdentifier *const ident = child.identifier;
+		NSInteger const i = ident.index;
+		if(NSNotFound != i) {	//	not a folder that has no entry of its own
+			if(i < 0 || i >= oldArchive.numberOfEntries) return NO;
+			NSNumber *const offset = [oldArchive dataForkParserDictionaryForEntry:(int)i][XADDataOffsetKey];
+			if(!offset) return NO;
+			NSUInteger const oldOffset = offset.unsignedIntegerValue;
+			NSNumber *const entry = newEntries[@(oldOffset - [removedBytes countOfIndexesInRange:NSMakeRange(0, oldOffset)])];
+			if(!entry) return NO;
+			[changes addObject:[^{
+				//	the identifier too, so that a bookmark made from now on finds its page
+				[ident setEntryIndex:entry.integerValue];
+				if(provider.archive == oldArchive) [(PGArchiveDataProvider *)provider setArchive:newArchive entry:entry.intValue];
+			} copy]];
+		}
+		//	an archive in the archive keeps reading the old file, which stays
+		//	as it was for as long as it's open
+		if(!childAdapter.isContainer || [childAdapter isKindOfClass:[PGArchiveAdapter class]]) continue;
+		if(![self _getChanges:changes forChildrenOf:(PGContainerAdapter *)childAdapter from:oldArchive to:newArchive entries:newEntries removedBytes:removedBytes]) return NO;
+	}
+	return YES;
 }
 
 //	returns an array containing the child nodes which represent all objects
@@ -600,8 +1065,10 @@ PGThumbnailOfFirstImageInArchive(NSString *path, CGFloat maxPixelSize)
 	//	2026/10/28 entries are extracted into memory, so refuse absurd sizes (eg,
 	//	decompression bombs)
 	if(_dataByteSize > PGArchiveEntryMaximumByteSize) return nil;
-	@synchronized(_archive) {
-		return [_archive contentsOfEntry:_entry]; // TODO: Handle password issues.
+	XADArchive *const archive = self.archive;	//	2026/11/16 these can change (see -setArchive:entry:)
+	int const entry = self.entry;
+	@synchronized(archive) {
+		return [archive contentsOfEntry:entry]; // TODO: Handle password issues.
 	}
 	return nil;
 }
@@ -617,16 +1084,20 @@ PGThumbnailOfFirstImageInArchive(NSString *path, CGFloat maxPixelSize)
 }
 - (NSDate *)dateModified
 {	//	2023/09/17 added to implement sorting by date modified in archives
-	@synchronized(_archive) {
-		return [_archive attributesOfEntry:_entry][NSFileModificationDate];
+	XADArchive *const archive = self.archive;
+	int const entry = self.entry;
+	@synchronized(archive) {
+		return [archive attributesOfEntry:entry][NSFileModificationDate];
 	}
 	return nil;
 }
 - (NSDate *)dateCreated
 {
-	@synchronized(_archive) {
+	XADArchive *const archive = self.archive;
+	int const entry = self.entry;
+	@synchronized(archive) {
 		//	2023/09/18 bugfix: was using XADCreationDateKey instead of NSFileCreationDate
-		return [_archive attributesOfEntry:_entry][NSFileCreationDate];
+		return [archive attributesOfEntry:entry][NSFileCreationDate];
 	}
 	return nil;
 }
@@ -678,21 +1149,37 @@ PGThumbnailOfFirstImageInArchive(NSString *path, CGFloat maxPixelSize)
 
 //	MARK: PGDataProvider(PGArchiveDataProvider)
 
+//	2026/11/16 these are read on other threads (eg, for thumbnails), and are
+//	changed when the archive file is rewritten
 - (XADArchive *)archive
 {
-	return _archive;
+	@synchronized(self) {
+		return _archive;
+	}
 }
 - (int)entry
 {
-	return _entry;
+	@synchronized(self) {
+		return _entry;
+	}
+}
+- (void)setArchive:(XADArchive *)archive entry:(int)entry
+{
+	NSParameterAssert(archive);
+	@synchronized(self) {
+		_archive = archive;
+		_entry = entry;
+	}
 }
 
 //	MARK: PGDataProvider(PGResourceAdapterLoading)
 
 - (NSArray *)adapterClassesForNode:(PGNode *)node
 {
-	@synchronized(_archive) {
-		if([_archive entryIsArchive:_entry]) return @[[PGArchiveAdapter class]];
+	XADArchive *const archive = self.archive;
+	int const entry = self.entry;
+	@synchronized(archive) {
+		if([archive entryIsArchive:entry]) return @[[PGArchiveAdapter class]];
 	}
 	return [super adapterClassesForNode:node];
 }

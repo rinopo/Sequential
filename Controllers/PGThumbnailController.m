@@ -606,6 +606,8 @@ static NSArray<NSURL *> *PGFileURLsOfNodes(NSArray<PGNode *> *nodes, BOOL neares
 	BOOL const allOnDisk = PGFileURLsOfNodes(nodes, NO).count == nodes.count;
 	BOOL const anyOnDisk = PGFileURLsOfNodes(nodes, YES).count > 0;
 	BOOL const singleImage = 1 == nodes.count && nodes[0].isViewable;
+	BOOL allTrashable = YES;	//	2026/11/16 files on disk, or images in zip files
+	for(PGNode *const node in nodes) if(![self.document canMoveNodeToTrash:node]) allTrashable = NO;
 
 	NSMenu *const menu = [[NSMenu alloc] initWithTitle:@""];
 	menu.autoenablesItems = NO;
@@ -624,7 +626,7 @@ static NSArray<NSURL *> *PGFileURLsOfNodes(NSArray<PGNode *> *nodes, BOOL neares
 	add(NSLocalizedString(@"Save Images To\u2026", @"Film strip context menu item."), @selector(_saveImagesTo:), self.document.node.resourceAdapter.hasNodesWithData);
 	add(NSLocalizedString(@"Set as Desktop Picture", @"Film strip context menu item."), @selector(_setAsDesktopPicture:), singleImage && allOnDisk);
 	[menu addItem:[NSMenuItem separatorItem]];
-	add(NSLocalizedString(@"Move to Trash", @"Film strip context menu item."), @selector(_moveToTrash:), allOnDisk);
+	add(NSLocalizedString(@"Move to Trash", @"Film strip context menu item."), @selector(_moveToTrash:), allTrashable);
 	return menu;
 }
 - (IBAction)_revealInFinder:(NSMenuItem *)sender

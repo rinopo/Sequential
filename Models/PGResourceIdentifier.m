@@ -240,6 +240,8 @@ NSString *const PGDisplayableIdentifierDisplayNameDidChangeNotification = @"PGDi
 
 //	MARK: - <NSObject>
 
+- (void)setEntryIndex:(NSInteger)index {}	//	2026/11/16 added: only for PGIndexIdentifier
+
 - (NSUInteger)hash
 {
 	return [[PGResourceIdentifier class] hash] ^ (NSUInteger)self.index;
@@ -499,6 +501,10 @@ NSString *const PGDisplayableIdentifierDisplayNameDidChangeNotification = @"PGDi
 - (NSInteger)index
 {
 	return _identifier.index;
+}
+- (void)setEntryIndex:(NSInteger)index
+{
+	[_identifier setEntryIndex:index];
 }
 - (BOOL)hasTarget
 {
@@ -940,6 +946,10 @@ NSString *const PGDisplayableIdentifierDisplayNameDidChangeNotification = @"PGDi
 - (NSInteger)index
 {
 	return _index;
+}
+- (void)setEntryIndex:(NSInteger)index
+{
+	_index = index;
 }
 - (BOOL)hasTarget
 {

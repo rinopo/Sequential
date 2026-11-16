@@ -140,11 +140,8 @@ static CFMutableSetRef PGActiveSubscriptions = nil;
 			//	when it is accessed in the main thread in -mainThread_sendFileEvent:
 			[self performSelectorOnMainThread:@selector(mainThread_sendFileEvent:)
 								   withObject:[NSDictionary dictionaryWithObjectsAndKeys:
-#if __has_feature(objc_arc)
-				[NSValue valueWithNonretainedObject:(__bridge PGLeafSubscription *)ev.udata], PGLeafSubscriptionValueKey,
-#else
-				[NSValue valueWithNonretainedObject:(PGLeafSubscription *)ev.udata], PGLeafSubscriptionValueKey,
-#endif
+				//	2026/11/16 as a pointer: the object may be deallocated by now
+				[NSValue valueWithPointer:ev.udata], PGLeafSubscriptionValueKey,
 				@(ev.fflags), PGLeafSubscriptionFlagsKey, nil]
 								waitUntilDone:NO];
 //NSLog(@"+[PGLeafSubscription threaded_sendFileEvents]: obj = %p", ev.udata);
@@ -157,12 +154,16 @@ static CFMutableSetRef PGActiveSubscriptions = nil;
 	NSParameterAssert(nil != info[PGLeafSubscriptionValueKey]);
 	NSParameterAssert([info[PGLeafSubscriptionValueKey] isKindOfClass:NSValue.class]);
 //NSLog(@"+[PGLeafSubscription mainThread_sendFileEvent]: obj = %p", info[PGLeafSubscriptionValueKey]);
-	NSParameterAssert(nil != [info[PGLeafSubscriptionValueKey] nonretainedObjectValue]);
-	PGSubscription *const subscription = [info[PGLeafSubscriptionValueKey] nonretainedObjectValue];
+	//	2026/11/16 bugfix: the subscription can have been deallocated since the
+	//	event was queued (eg, 2 events are queued and the 1st one's observer
+	//	releases it), so the pointer is looked up before it's used as an
+	//	object; under ARC, even assigning it to a variable retained it (crash)
+	void *const pointer = [info[PGLeafSubscriptionValueKey] pointerValue];
+	if(!pointer || !CFSetContainsValue(PGActiveSubscriptions, pointer)) return;
 #if __has_feature(objc_arc)
-	if(!CFSetContainsValue(PGActiveSubscriptions, (__bridge CFTypeRef) subscription)) return;
+	PGSubscription *const subscription = (__bridge PGSubscription *)pointer;
 #else
-	if(!CFSetContainsValue(PGActiveSubscriptions, subscription)) return;
+	PGSubscription *const subscription = (PGSubscription *)pointer;
 #endif
 	NSMutableDictionary *const dict = [NSMutableDictionary dictionary];
 	NSString *const path = subscription.path;
