@@ -189,7 +189,10 @@ PGOrientation PGOrientationWithTIFFOrientation(NSUInteger orientation)
 PGOrientation PGAddOrientation(PGOrientation o1, PGOrientation o2)
 {
 	PGOrientation n1 = o1, n2 = o2;
-	if(o1 & PGRotated90CCW && !(o2 & PGRotated90CCW)) n2 = ((o2 & PGFlippedHorz) >> 1) | ((o2 & PGFlippedVert) << 1);
+	//	2026/11/17 bugfix: o2's flips are swapped whenever o1 is rotated, also when o2 is
+	//	rotated too (was: only when it isn't); it mattered when o2 was both rotated and
+	//	flipped in one direction, as a page's orientation can be
+	if(o1 & PGRotated90CCW) n2 = (o2 & PGRotated90CCW) | ((o2 & PGFlippedHorz) >> 1) | ((o2 & PGFlippedVert) << 1);
 	PGOrientation r = n1 ^ n2;
 	if(o1 & PGRotated90CCW && o2 & PGRotated90CCW) r ^= PGUpsideDown;
 	return r;
